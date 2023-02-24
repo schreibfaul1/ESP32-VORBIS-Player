@@ -114,18 +114,6 @@ int32_t _get_data(OggVorbis_File *vf) {
 		return 0;
 }
 
-/* save a tiny smidge of verbosity to make the code more readable */
-void _seek_helper(OggVorbis_File *vf, int64_t offset) {
-	if(vf->datasource) {
-		vf->offset = offset;
-		ogg_sync_reset(vf->oy);
-	}
-	else {
-		/* shouldn't happen unless someone writes a broken callback */
-		return;
-	}
-}
-
 /* The read/seek functions track absolute position within the stream */
 
 /* from the head of the stream, get the next page.  boundary specifies
@@ -190,7 +178,6 @@ int64_t _get_prev_page(OggVorbis_File *vf, ogg_page *og) {
 	while(offset == -1) {
 		begin -= CHUNKSIZE;
 		if(begin < 0) begin = 0;
-		_seek_helper(vf, begin);
 		while(vf->offset < end) {
 			ret = _get_next_page(vf, og, end - vf->offset);
 			if(ret == OV_EREAD) return OV_EREAD;
@@ -200,7 +187,6 @@ int64_t _get_prev_page(OggVorbis_File *vf, ogg_page *og) {
 	}
 
 	/* we have the offset.  Actually snork and hold the page now */
-	_seek_helper(vf, offset);
 	ret = _get_next_page(vf, og, CHUNKSIZE);
 	if(ret < 0) /* this shouldn't be possible */
 		return OV_EFAULT;
@@ -227,7 +213,6 @@ int _bisect_forward_serialno(OggVorbis_File *vf, int64_t begin, int64_t searched
 		if(endsearched - searched < CHUNKSIZE) { bisect = searched; }
 		else { bisect = (searched + endsearched) / 2; }
 
-		_seek_helper(vf, bisect);
 		ret = _get_next_page(vf, &og, -1);
 		if(ret == OV_EREAD) return OV_EREAD;
 		if(ret < 0 || ogg_page_serialno(&og) != currentno) {
@@ -238,7 +223,6 @@ int _bisect_forward_serialno(OggVorbis_File *vf, int64_t begin, int64_t searched
 		ogg_page_release(&og);
 	}
 
-	_seek_helper(vf, next);
 	ret = _get_next_page(vf, &og, -1);
 	if(ret == OV_EREAD) return OV_EREAD;
 
@@ -342,12 +326,10 @@ void _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset) {
 		if(i == 0) {
 			/* we already grabbed the initial header earlier.  Just set the offset */
 			vf->dataoffsets[i] = dataoffset;
-			_seek_helper(vf, dataoffset);
 		}
 		else {
 			/* seek to the location of the initial header */
 
-			_seek_helper(vf, vf->offsets[i]);
 			if(_fetch_headers(vf, &vf->vi, &vf->vc, NULL, NULL) < 0) { vf->dataoffsets[i] = -1; }
 			else { vf->dataoffsets[i] = vf->offset; }
 		}
@@ -403,7 +385,6 @@ void _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset) {
 		 get the last page of the stream */
 		{
 			int64_t end = vf->offsets[i + 1];
-			_seek_helper(vf, end);
 
 			while(1) {
 				ret = _get_prev_page(vf, &og);
@@ -595,7 +576,6 @@ int _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp) {
 		 */
 
 		if(vf->ready_state != INITSET) {
-			int link, ret;
 
 			if(vf->ready_state < STREAMSET) {
 
@@ -615,13 +595,6 @@ cleanup:
 	ogg_packet_release(&op);
 	ogg_page_release(&og);
 	return ret;
-}
-
-/* if, eg, 64 bit stdio is configured by default, this will build with
- fseek64 */
-int _fseek64_wrap(File* fIn, int64_t off, int whence) {
-	if(!fIn) return -1;
-	return fIn->seek(whence);
 }
 
 int _ov_open1(File* f, OggVorbis_File *vf) {

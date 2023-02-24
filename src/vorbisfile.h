@@ -271,7 +271,6 @@ typedef struct OggVorbis_File
 
 //---------------------------------------------------------------------------------------------------------------------
 int32_t _get_data(OggVorbis_File *vf);
-void    _seek_helper(OggVorbis_File *vf, int64_t offset);
 int64_t _get_next_page(OggVorbis_File *vf, ogg_page *og, int64_t boundary);
 int64_t _get_prev_page(OggVorbis_File *vf, ogg_page *og);
 int     _bisect_forward_serialno(OggVorbis_File *vf, int64_t begin, int64_t searched, int64_t end, uint32_t currentno,
@@ -282,7 +281,6 @@ void    _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset);
 int     _make_decode_ready(OggVorbis_File *vf);
 int     _open_seekable2(OggVorbis_File *vf);
 int     _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp);
-int     _fseek64_wrap(File* fIn, int64_t off, int whence);
 int     _ov_open1(File* fIn, OggVorbis_File *vf);
 int     _ov_open2(OggVorbis_File *vf);
 int     ov_clear(OggVorbis_File *vf);
