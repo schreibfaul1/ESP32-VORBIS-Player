@@ -248,7 +248,7 @@ typedef struct vorbis_dsp_state vorbis_dsp_state;
 typedef struct OggVorbis_File
 {
 	File               *datasource; /* Pointer to a FILE *, etc. */
-	int                 seekable;
+//	int                 seekable;
 	int64_t             offset;
 	int64_t             end;
 	ogg_sync_state_t   *oy;     // If the FILE handle isn't seekable (eg, a pipe), only the current
