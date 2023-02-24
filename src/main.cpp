@@ -252,7 +252,7 @@ void setup() {
     }
 
 
-	const char inPath[]  = "/ogg/in1.ogg";
+	const char inPath[]  = "/ogg/in.ogg";
 	const char outPath[] = "/ogg/out.wav";
 
 	if(!SD_MMC.exists(inPath)){
