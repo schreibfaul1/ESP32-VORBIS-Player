@@ -254,5 +254,11 @@ void mdct_unroll_lap(int n0, int n1, int lW, int W, int *in, int *right, const i
 					 int step, int start, /* samples, this frame */
 					 int end /* samples, this frame */);
 void res_clear_info(vorbis_info_residue *info);
-int  res_unpack(vorbis_info_residue *info, vorbis_info *vi, oggpack_buffer_t *opb);
+int  res_unpack(vorbis_info_residue *info, vorbis_info *vi, oggpack_buffer *opb);
 int  res_inverse(vorbis_dsp_state *vd, vorbis_info_residue *info, int32_t **in, int *nonzero, uint8_t ch);
+
+void    oggpack_readinit(oggpack_buffer *b, ogg_reference *r);
+int32_t oggpack_look(oggpack_buffer *b, uint16_t bits);
+void    oggpack_adv(oggpack_buffer *b, uint16_t bits);
+int     oggpack_eop(oggpack_buffer *b);
+int32_t oggpack_read(oggpack_buffer *b, uint16_t bits);
