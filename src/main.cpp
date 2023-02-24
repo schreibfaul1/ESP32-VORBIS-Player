@@ -239,8 +239,6 @@ void setup() {
     setupI2S();
     setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, -1);
     setBitsPerSample(16);
-    setChannels(2);
-    setSampleRate(44100);
     I2Sstart(m_i2s_num);
     Serial.begin(115200);
     delay(1000);
@@ -279,6 +277,10 @@ void setup() {
 	fprintf(stderr, "\nBitstream is %d channel, %idHz\n", vi->channels, vi->rate);
 	fprintf(stderr, "\nDecoded length: %i samples\n", (int32_t)ov_pcm_total(&vf, -1));
 	fprintf(stderr, "Encoded by: %s\n\n", ov_comment(&vf)->vendor);
+
+    setChannels(vi->channels);
+    setSampleRate(vi->rate);
+
 
 	uint8_t header[44];
 	memset(header, 0, 44);
