@@ -31,32 +31,25 @@
 #define OGG_EINVAL   -14
 #define OGG_EEOS     -15
 
-typedef struct ogg_buffer_state
-{
+typedef struct ogg_buffer_state{
 	struct ogg_buffer    *unused_buffers;
 	struct ogg_reference *unused_references;
 	int                   outstanding;
 	int                   shutdown;
 } ogg_buffer_state_t;
 
-typedef struct ogg_buffer
-{
+typedef struct ogg_buffer{
 	uint8_t *data;
 	int32_t  size;
 	int      refcount;
-	union
-	{
-		ogg_buffer_state_t *owner;
-		struct ogg_buffer  *next;
-	} ptr;
+	ogg_buffer_state_t *owner;
+	struct ogg_buffer  *next;
 } ogg_buffer_t;
 
-typedef struct ogg_reference
-{
+typedef struct ogg_reference{
 	ogg_buffer_t *buffer;
 	int32_t       begin;
 	int32_t       length;
-
 	struct ogg_reference *next;
 } ogg_reference_t;
 
@@ -276,30 +269,20 @@ int64_t _get_prev_page(OggVorbis_File *vf, ogg_page *og);
 int     _bisect_forward_serialno(OggVorbis_File *vf, int64_t begin, int64_t searched, int64_t end, uint32_t currentno,
 								 int32_t m);
 int     _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, uint32_t *serialno, ogg_page *og_ptr);
-int     _set_link_number(OggVorbis_File *vf, int link);
 void    _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset);
 int     _make_decode_ready(OggVorbis_File *vf);
-int     _open_seekable2(OggVorbis_File *vf);
 int     _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp);
 int     _ov_open1(File* fIn, OggVorbis_File *vf);
-int     _ov_open2(OggVorbis_File *vf);
 int     ov_clear(OggVorbis_File *vf);
 int     ov_open(File* fIn, OggVorbis_File *vf);
 int32_t ov_bitrate(OggVorbis_File *vf, int i);
 int32_t ov_bitrate_instant(OggVorbis_File *vf);
 int32_t ov_serialnumber(OggVorbis_File *vf, int i);
-int64_t ov_raw_total(OggVorbis_File *vf, int i);
 int64_t ov_pcm_total(OggVorbis_File *vf, int i);
 int64_t ov_time_total(OggVorbis_File *vf, int i);
-int     ov_raw_seek(OggVorbis_File *vf, int64_t pos);
-int     ov_pcm_seek(OggVorbis_File *vf, int64_t pos);
 vorbis_info    *ov_info(OggVorbis_File *vf, int link);
 vorbis_comment *ov_comment(OggVorbis_File *vf);
 int32_t         ov_read(OggVorbis_File *vf, void *outBuff, int bytes_req);
-
-
-
-
 
 ogg_buffer_state_t *ogg_buffer_create(void);
 void                _ogg_buffer_destroy(ogg_buffer_state_t *bs);
@@ -309,13 +292,10 @@ uint8_t            *ogg_sync_bufferin(ogg_sync_state_t *oy, int32_t bytes);
 ogg_reference_t    *ogg_buffer_alloc(ogg_buffer_state_t *bs, int32_t bytes);
 void                ogg_buffer_realloc(ogg_reference_t *_or, int32_t bytes);
 ogg_reference_t    *_fetch_ref(ogg_buffer_state_t *bs);
-ogg_buffer_t       *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes);
 int                 ogg_sync_wrote(ogg_sync_state_t *oy, int32_t bytes);
 int                 ogg_sync_reset(ogg_sync_state_t *oy);
 void                ogg_buffer_release(ogg_reference_t *_or);
 void                ogg_buffer_release_one(ogg_reference_t *_or);
-void                _ogg_buffer_destroy(ogg_buffer_state_t *bs);
-void                ogg_buffer_destroy(ogg_buffer_state_t *bs);
 int32_t             ogg_sync_pageseek(ogg_sync_state_t *oy, ogg_page *og);
 int                 oggbyte_init(oggbyte_buffer_t *b, ogg_reference_t *_or);
 uint8_t             oggbyte_read1(oggbyte_buffer_t *b, int pos);
@@ -347,7 +327,6 @@ int                 ogg_packet_release(ogg_packet *op);
 int                 _packetout(ogg_stream_state_t *os, ogg_packet *op, int adv);
 void                _span_queued_page(ogg_stream_state_t *os);
 void                _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os);
-ogg_buffer_state_t *ogg_buffer_create(void);
 ogg_sync_state_t   *ogg_sync_create(void);
 int                 ogg_sync_destroy(ogg_sync_state_t *oy);
 ogg_stream_state_t *ogg_stream_create(int serialno);

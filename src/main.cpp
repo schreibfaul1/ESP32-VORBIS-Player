@@ -252,7 +252,7 @@ void setup() {
     }
 
 
-	const char inPath[]  = "/ogg/Amarillo.ogg";
+	const char inPath[]  = "/ogg/in.ogg";
 	const char outPath[] = "/ogg/out.wav";
 
 	if(!SD_MMC.exists(inPath)){
@@ -265,7 +265,7 @@ void setup() {
 
 	if(ov_open(&fIn, &vf) < 0) {
 		printf("Input does not appear to be an Ogg bitstream.\n");
-		exit(1);
+		return;
 	}
     m_f_isPlaying = true;
 	char       **ptr = ov_comment(&vf)->user_comments;
@@ -317,13 +317,13 @@ void setup() {
 
 			fOut.write((const uint8_t*)m_outBuff, ret);
 			m_validSamples = ret/4;
-			printf("validSamples %i\n", m_validSamples);
+		//	printf("validSamples %i\n", m_validSamples);
             playChunk();
 		}
 	}
 
 	/* cleanup */
-	//ov_clear(&vf);
+	ov_clear(&vf);
 	fIn.close();
 	fOut.close();
 	log_e("highWaterMark %u", uxTaskGetStackHighWaterMark(NULL));
