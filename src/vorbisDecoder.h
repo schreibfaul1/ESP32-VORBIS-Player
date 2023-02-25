@@ -58,120 +58,120 @@
 #define VIF_POSIT      63
 
 #ifndef min
-	#define min(x, y) ((x) > (y) ? (y) : (x))
+    #define min(x, y) ((x) > (y) ? (y) : (x))
 #endif
 
 #ifndef max
-	#define max(x, y) ((x) < (y) ? (y) : (x))
+    #define max(x, y) ((x) < (y) ? (y) : (x))
 #endif
 
 #define _lookspan()                             \
-	while(!end) {                               \
-		head = head->next;                      \
-		if(!head) return -1;                    \
-		ptr = head->buffer->data + head->begin; \
-		end = head->length;                     \
-	}
+    while(!end) {                               \
+        head = head->next;                      \
+        if(!head) return -1;                    \
+        ptr = head->buffer->data + head->begin; \
+        end = head->length;                     \
+    }
 //---------------------------------------------------------------------------------------------------------------------
 typedef struct codebook{
-	uint8_t  dim;          /* codebook dimensions (elements per vector) */
-	uint16_t entries;      /* codebook entries */
-	uint16_t used_entries; /* populated codebook entries */
-	uint32_t dec_maxlength;
-	void    *dec_table;
-	uint32_t dec_nodeb;
-	uint32_t dec_leafw;
-	uint32_t dec_type; /* 0 = entry number
-						  1 = packed vector of values
-						  2 = packed vector of column offsets, maptype 1
-						  3 = scalar offset into value array,  maptype 2  */
-	int32_t q_min;
-	int     q_minp;
-	int32_t q_del;
-	int     q_delp;
-	int     q_seq;
-	int     q_bits;
-	uint8_t q_pack;
-	void   *q_val;
+    uint8_t  dim;          /* codebook dimensions (elements per vector) */
+    uint16_t entries;      /* codebook entries */
+    uint16_t used_entries; /* populated codebook entries */
+    uint32_t dec_maxlength;
+    void    *dec_table;
+    uint32_t dec_nodeb;
+    uint32_t dec_leafw;
+    uint32_t dec_type; /* 0 = entry number
+                          1 = packed vector of values
+                          2 = packed vector of column offsets, maptype 1
+                          3 = scalar offset into value array,  maptype 2  */
+    int32_t q_min;
+    int     q_minp;
+    int32_t q_del;
+    int     q_delp;
+    int     q_seq;
+    int     q_bits;
+    uint8_t q_pack;
+    void   *q_val;
 } codebook;
 
 struct vorbis_dsp_state;
 typedef struct vorbis_dsp_state vorbis_dsp_state;
 
 typedef struct coupling_step{  // Mapping backend generic
-	uint8_t mag;
-	uint8_t ang;
+    uint8_t mag;
+    uint8_t ang;
 } coupling_step;
 
 typedef struct submap
 {
-	char floor;
-	char residue;
+    char floor;
+    char residue;
 } submap;
 
 typedef struct vorbis_info_mapping
 {
-	int            submaps;
-	uint8_t       *chmuxlist;
-	submap        *submaplist;
-	int            coupling_steps;
-	coupling_step *coupling;
+    int            submaps;
+    uint8_t       *chmuxlist;
+    submap        *submaplist;
+    int            coupling_steps;
+    coupling_step *coupling;
 } vorbis_info_mapping;
 
 typedef struct codec_setup_info{         // Vorbis supports only short and int32_t blocks, but allows the
-	uint32_t             blocksizes[2];  // encoder to choose the sizes
-	uint32_t             modes;          // modes are the primary means of supporting on-the-fly different
-	uint32_t             maps;           // blocksizes, different channel mappings (LR or M/A),
-	uint32_t             floors;         // different residue backends, etc.  Each mode consists of a
-	uint32_t             residues;       // blocksize flag and a mapping (aint32_t with the mapping setup
-	uint32_t             books;
-	vorbis_info_mode    *mode_param;
-	vorbis_info_mapping *map_param;
-	char                *floor_type;
-	vorbis_info_floor  **floor_param;
-	vorbis_info_residue *residue_param;
-	codebook            *book_param;
+    uint32_t             blocksizes[2];  // encoder to choose the sizes
+    uint32_t             modes;          // modes are the primary means of supporting on-the-fly different
+    uint32_t             maps;           // blocksizes, different channel mappings (LR or M/A),
+    uint32_t             floors;         // different residue backends, etc.  Each mode consists of a
+    uint32_t             residues;       // blocksize flag and a mapping (aint32_t with the mapping setup
+    uint32_t             books;
+    vorbis_info_mode    *mode_param;
+    vorbis_info_mapping *map_param;
+    char                *floor_type;
+    vorbis_info_floor  **floor_param;
+    vorbis_info_residue *residue_param;
+    codebook            *book_param;
 } codec_setup_info;
 
 //---------------------------------------------------------------------------------------------------------------------
 
 union magic{
-	struct{
-		int32_t lo;
-		int32_t hi;
-	} halves;
-	int64_t whole;
+    struct{
+        int32_t lo;
+        int32_t hi;
+    } halves;
+    int64_t whole;
 };
 
 inline int32_t MULT32(int32_t x, int32_t y) {
-	union magic magic;
-	magic.whole = (int64_t)x * y;
-	return magic.halves.hi;
+    union magic magic;
+    magic.whole = (int64_t)x * y;
+    return magic.halves.hi;
 }
 
 inline int32_t MULT31_SHIFT15(int32_t x, int32_t y) {
-	union magic magic;
-	magic.whole = (int64_t)x * y;
-	return ((uint32_t)(magic.halves.lo) >> 15) | ((magic.halves.hi) << 17);
+    union magic magic;
+    magic.whole = (int64_t)x * y;
+    return ((uint32_t)(magic.halves.lo) >> 15) | ((magic.halves.hi) << 17);
 }
 
 inline int32_t MULT31(int32_t x, int32_t y) { return MULT32(x, y) << 1; }
 
 inline void XPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t *x, int32_t *y) {
-	*x = MULT31(a, t) + MULT31(b, v);
-	*y = MULT31(b, t) - MULT31(a, v);
+    *x = MULT31(a, t) + MULT31(b, v);
+    *y = MULT31(b, t) - MULT31(a, v);
 }
 
 inline void XNPROD31(int32_t a, int32_t b, int32_t t, int32_t v, int32_t *x, int32_t *y) {
-	*x = MULT31(a, t) - MULT31(b, v);
-	*y = MULT31(b, t) + MULT31(a, v);
+    *x = MULT31(a, t) - MULT31(b, v);
+    *y = MULT31(b, t) + MULT31(a, v);
 }
 
 inline int32_t CLIP_TO_15(int32_t x) {
-	int ret = x;
-	ret -= ((x <= 32767) - 1) & (x - 32767);
-	ret -= ((x >= -32768) - 1) & (x + 32768);
-	return (ret);
+    int ret = x;
+    ret -= ((x <= 32767) - 1) & (x - 32767);
+    ret -= ((x >= -32768) - 1) & (x + 32768);
+    return (ret);
 }
 
 //---------------------------------------------------------------------------------------------------------------------
@@ -208,7 +208,7 @@ int32_t           vorbis_coslook2_i(int32_t a);
 int32_t           toBARK(int n);
 int32_t           vorbis_invsqlook_i(int32_t a, int32_t e);
 void vorbis_lsp_to_curve(int32_t *curve, int n, int ln, int32_t *lsp, int m, int32_t amp, int32_t ampoffset,
-						 int32_t nyq);
+                         int32_t nyq);
 void floor0_free_info(vorbis_info_floor *i);
 vorbis_info_floor *floor0_info_unpack(vorbis_info *vi, oggpack_buffer *opb);
 int                floor0_memosize(vorbis_info_floor *i);
@@ -250,8 +250,8 @@ void               mdct_step8(int32_t *x, int n, int step);
 void               mdct_backward(int n, int32_t *in);
 void               mdct_shift_right(int n, int32_t *in, int32_t *right);
 void mdct_unroll_lap(int n0, int n1, int lW, int W, int *in, int *right, const int *w0, const int *w1, short int *out,
-					 int step, int start, /* samples, this frame */
-					 int end /* samples, this frame */);
+                     int step, int start, /* samples, this frame */
+                     int end /* samples, this frame */);
 void res_clear_info(vorbis_info_residue *info);
 int  res_unpack(vorbis_info_residue *info, vorbis_info *vi, oggpack_buffer *opb);
 int  res_inverse(vorbis_dsp_state *vd, vorbis_info_residue *info, int32_t **in, int *nonzero, uint8_t ch);
