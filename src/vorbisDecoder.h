@@ -11,10 +11,7 @@
  ********************************************************************/
 
 #pragma once
-#pragma GCC diagnostic ignored "-Wconversion"
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-#include <stdint.h>
-#include <stdio.h>
+#include "Arduino.h"
 #include "vorbisfile.h"
 
 //-------------------------------------------------------------------------------------------------------------------------------------------------------------

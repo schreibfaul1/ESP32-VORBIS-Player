@@ -10,23 +10,9 @@
  *                                                                  *
  ********************************************************************/
 
-
-#pragma GCC diagnostic ignored "-Wconversion"
-#pragma GCC diagnostic ignored "-Wsign-conversion"
-#pragma GCC diagnostic ignored "-Wsign-compare"
-//#pragma GCC diagnostic ignored "-Wtype-limits"
-//#pragma GCC diagnostic ignored "-Wshadow"
-//#pragma GCC diagnostic ignored "-Wsign-conversion"
-//#pragma GCC diagnostic ignored "-Wshift-negative-value"
-
+#include "Arduino.h"
+#include "alloca.h"
 #include "vorbisDecoder.h"
-#include <ctype.h>
-#include <math.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <alloca.h>
 #include "vorbisfile.h"
 
 

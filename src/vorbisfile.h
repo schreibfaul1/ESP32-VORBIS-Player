@@ -14,8 +14,6 @@
 #ifndef _OGG_H
 #define _OGG_H
 
-#include <stdint.h>
-#include <stdio.h>
 #include "Arduino.h"
 #include "SD_MMC.h"
 
