@@ -1302,7 +1302,6 @@ void _span(oggpack_buffer *b) {
         }
     }
 }
-
 //---------------------------------------------------------------------------------------------------------------------
 int ilog(uint32_t v) {
     int ret = 0;
@@ -1549,7 +1548,7 @@ int _make_words(char *l, uint16_t n, uint32_t *r, uint8_t quantvals, codebook *b
 //---------------------------------------------------------------------------------------------------------------------
 int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack_buffer *opb, int maptype) {
 
-    uint32_t *work;
+    uint32_t *work = nullptr;
 
     if(s->dec_nodeb == 4) {
             log_i("vmd %i", (s->used_entries * 2 + 1) * sizeof(*work));
@@ -1560,10 +1559,13 @@ int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack
         return 0;
     }
 
-    work = (uint32_t *)alloca((uint32_t)(s->used_entries * 2 - 2) * sizeof(*work));
-    if(_make_words(lengthlist, s->entries, work, quantvals, s, opb, maptype)) return 1;
+    work = (uint32_t *)__malloc_heap_psram((uint32_t)(s->used_entries * 2 - 2) * sizeof(*work));
+    if(!work) log_e("oom");
 
-     log_i("vmd %i", (s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
+    if(_make_words(lengthlist, s->entries, work, quantvals, s, opb, maptype)){
+        if(work) free(work);
+        return 1;
+    }
     s->dec_table = __malloc_heap_psram((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
 
     if(s->dec_leafw == 1) {
@@ -1651,6 +1653,7 @@ int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack
             }
         }
     }
+    if(work) free(work);
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1775,10 +1778,12 @@ int vorbis_book_unpack(oggpack_buffer *opb, codebook *s) {
     /* Do we have a mapping to unpack? */
 
     if((maptype = oggpack_read(opb, 4)) > 0) {
-        s->q_min = _float32_unpack(oggpack_read(opb, 32), &s->q_minp);
-        s->q_del = _float32_unpack(oggpack_read(opb, 32), &s->q_delp);
+
+        s->q_min  = _float32_unpack(oggpack_read(opb, 32), &s->q_minp);
+        s->q_del  = _float32_unpack(oggpack_read(opb, 32), &s->q_delp);
+
         s->q_bits = oggpack_read(opb, 4) + 1;
-        s->q_seq = oggpack_read(opb, 1);
+        s->q_seq  = oggpack_read(opb, 1);
 
         s->q_del >>= s->q_bits;
         s->q_delp += s->q_bits;
@@ -1795,6 +1800,7 @@ int vorbis_book_unpack(oggpack_buffer *opb, codebook *s) {
             s->dec_type = 0;
 
             if(_make_decode_table(s, lengthlist, quantvals, opb, maptype)) goto _errout;
+
             break;
 
         case 1:
@@ -3142,6 +3148,7 @@ int _vorbis_unpack_books(vorbis_info *vi, oggpack_buffer *opb) {
     /* codebooks */
     ci->books = oggpack_read(opb, 8) + 1;
     ci->book_param = (codebook *)__calloc_heap_psram(ci->books, sizeof(*ci->book_param));
+
     for(i = 0; i < ci->books; i++)
         if(vorbis_book_unpack(opb, ci->book_param + i)) goto err_out;
 
@@ -3217,6 +3224,7 @@ int vorbis_dsp_headerin(vorbis_info *vi, vorbis_comment *vc, ogg_packet *op) {
                 /* not a vorbis header */
                 return (OV_ENOTVORBIS);
             }
+
             switch(packtype) {
                 case 0x01: /* least significant *bit* is read first */
                     if(!op->b_o_s) {
@@ -3235,7 +3243,6 @@ int vorbis_dsp_headerin(vorbis_info *vi, vorbis_comment *vc, ogg_packet *op) {
                         /* um... we didn't get the initial header */
                         return (OV_EBADHEADER);
                     }
-
                     return (_vorbis_unpack_comment(vc, &opb));
 
                 case 0x05: /* least significant *bit* is read first */
@@ -3243,9 +3250,7 @@ int vorbis_dsp_headerin(vorbis_info *vi, vorbis_comment *vc, ogg_packet *op) {
                         /* um... we didn;t get the initial header or comments yet */
                         return (OV_EBADHEADER);
                     }
-
-                    return (_vorbis_unpack_books(vi, &opb));
-
+                    return _vorbis_unpack_books(vi, &opb);
                 default:
                     /* Not a valid vorbis header type */
                     return (OV_EBADHEADER);

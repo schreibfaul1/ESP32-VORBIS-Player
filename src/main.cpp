@@ -263,10 +263,13 @@ void setup() {
 	File fIn = SD_MMC.open(inPath, "r");
 	File fOut = SD_MMC.open(outPath, "w");
 
+    log_e("highWaterMark %u", uxTaskGetStackHighWaterMark(NULL));
+
 	if(ov_open(&fIn, &vf) < 0) {
 		printf("Input does not appear to be an Ogg bitstream.\n");
 		return;
 	}
+
     m_f_isPlaying = true;
 	char       **ptr = ov_comment(&vf)->user_comments;
 	vorbis_info *vi = ov_info(&vf, -1);
