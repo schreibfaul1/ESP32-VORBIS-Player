@@ -75,7 +75,7 @@
 //---------------------------------------------------------------------------------------------------------------------
 typedef struct codebook{
     uint8_t  dim;          /* codebook dimensions (elements per vector) */
-    uint16_t entries;      /* codebook entries */
+    int16_t entries;       /* codebook entries */
     uint16_t used_entries; /* populated codebook entries */
     uint32_t dec_maxlength;
     void    *dec_table;
@@ -127,7 +127,7 @@ typedef struct codec_setup_info{         // Vorbis supports only short and int32
     uint32_t             books;
     vorbis_info_mode    *mode_param;
     vorbis_info_mapping *map_param;
-    char                *floor_type;
+    int8_t              *floor_type;
     vorbis_info_floor  **floor_param;
     vorbis_info_residue *residue_param;
     codebook            *book_param;

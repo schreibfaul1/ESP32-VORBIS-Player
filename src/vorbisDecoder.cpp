@@ -14,7 +14,7 @@
 #pragma GCC diagnostic ignored "-Wconversion"
 #pragma GCC diagnostic ignored "-Wsign-conversion"
 #pragma GCC diagnostic ignored "-Wsign-compare"
-#pragma GCC diagnostic ignored "-Wtype-limits"
+//#pragma GCC diagnostic ignored "-Wtype-limits"
 //#pragma GCC diagnostic ignored "-Wshadow"
 //#pragma GCC diagnostic ignored "-Wsign-conversion"
 //#pragma GCC diagnostic ignored "-Wshift-negative-value"
@@ -1558,9 +1558,11 @@ int _make_words(char *l, uint16_t n, uint32_t *r, uint8_t quantvals, codebook *b
 }
 //---------------------------------------------------------------------------------------------------------------------
 int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack_buffer *opb, int maptype) {
+
     uint32_t *work;
 
     if(s->dec_nodeb == 4) {
+            log_i("vmd %i", (s->used_entries * 2 + 1) * sizeof(*work));
         s->dec_table = malloc((s->used_entries * 2 + 1) * sizeof(*work));
         /* +1 (rather than -2) is to accommodate 0 and 1 sized books, which are specialcased to nodeb==4 */
         if(_make_words(lengthlist, s->entries, (uint32_t *)s->dec_table, quantvals, s, opb, maptype)) return 1;
@@ -1570,6 +1572,8 @@ int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack
 
     work = (uint32_t *)alloca((uint32_t)(s->used_entries * 2 - 2) * sizeof(*work));
     if(_make_words(lengthlist, s->entries, work, quantvals, s, opb, maptype)) return 1;
+
+     log_i("vmd %i", (s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
     s->dec_table = malloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
 
     if(s->dec_leafw == 1) {
@@ -1590,7 +1594,7 @@ int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack
         if(s->dec_nodeb == 1) {
             uint8_t *out = (uint8_t *)s->dec_table;
 
-            for(uint32_t i = s->used_entries * 2 - 4; i >= 0; i -= 2) {
+            for(int32_t i = s->used_entries * 2 - 4; i >= 0; i -= 2) {
                 if(work[i] & 0x80000000UL) {
                     if(work[i + 1] & 0x80000000UL) {
                         top -= 4;
@@ -3140,6 +3144,7 @@ err_out:
 //---------------------------------------------------------------------------------------------------------------------
 /* all of the real encoding details are here.  The modes, books, everything */
 int _vorbis_unpack_books(vorbis_info *vi, oggpack_buffer *opb) {
+
     codec_setup_info *ci = (codec_setup_info *)vi->codec_setup;
     int               i;
     if(!ci) return (OV_EFAULT);
@@ -3158,7 +3163,7 @@ int _vorbis_unpack_books(vorbis_info *vi, oggpack_buffer *opb) {
     /* floor backend settings */
     ci->floors = oggpack_read(opb, 6) + 1;
     ci->floor_param = (vorbis_info_floor **)malloc(sizeof(*ci->floor_param) * ci->floors);
-    ci->floor_type = (char *)malloc(sizeof(*ci->floor_type) * ci->floors);
+    ci->floor_type = (int8_t*)malloc(sizeof(*ci->floor_type) * ci->floors);
     for(i = 0; i < ci->floors; i++) {
         ci->floor_type[i] = oggpack_read(opb, 16);
         if(ci->floor_type[i] < 0 || ci->floor_type[i] >= VI_FLOORB) goto err_out;
