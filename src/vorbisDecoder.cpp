@@ -15,6 +15,10 @@
 #include "vorbisDecoder.h"
 #include "vorbisfile.h"
 
+#define __malloc_heap_psram(size) \
+    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+#define __calloc_heap_psram(ch, size) \
+    heap_caps_calloc_prefer(ch, size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
 
 const int32_t FLOOR_fromdB_LOOKUP[256] = {
     0x000000e5, 0x000000f4, 0x00000103, 0x00000114, 0x00000126, 0x00000139, 0x0000014e, 0x00000163, 0x0000017a,
@@ -1549,7 +1553,7 @@ int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack
 
     if(s->dec_nodeb == 4) {
             log_i("vmd %i", (s->used_entries * 2 + 1) * sizeof(*work));
-        s->dec_table = malloc((s->used_entries * 2 + 1) * sizeof(*work));
+        s->dec_table = __malloc_heap_psram((s->used_entries * 2 + 1) * sizeof(*work));
         /* +1 (rather than -2) is to accommodate 0 and 1 sized books, which are specialcased to nodeb==4 */
         if(_make_words(lengthlist, s->entries, (uint32_t *)s->dec_table, quantvals, s, opb, maptype)) return 1;
 
@@ -1560,7 +1564,7 @@ int _make_decode_table(codebook *s, char *lengthlist, uint8_t quantvals, oggpack
     if(_make_words(lengthlist, s->entries, work, quantvals, s, opb, maptype)) return 1;
 
      log_i("vmd %i", (s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
-    s->dec_table = malloc((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
+    s->dec_table = __malloc_heap_psram((s->used_entries * (s->dec_leafw + 1) - 2) * s->dec_nodeb);
 
     if(s->dec_leafw == 1) {
         switch(s->dec_nodeb) {
@@ -1830,11 +1834,11 @@ int vorbis_book_unpack(oggpack_buffer *opb, codebook *s) {
                     /* use dec_type 2: packed vector of column offsets */
                     /* need quantized values before */
                     if(s->q_bits <= 8) {
-                        s->q_val = malloc(quantvals);
+                        s->q_val = __malloc_heap_psram(quantvals);
                         for(i = 0; i < quantvals; i++) ((uint8_t *)s->q_val)[i] = oggpack_read(opb, s->q_bits);
                     }
                     else {
-                        s->q_val = malloc(quantvals * 2);
+                        s->q_val = __malloc_heap_psram(quantvals * 2);
                         for(i = 0; i < quantvals; i++) ((uint16_t *)s->q_val)[i] = oggpack_read(opb, s->q_bits);
                     }
 
@@ -1872,7 +1876,7 @@ int vorbis_book_unpack(oggpack_buffer *opb, codebook *s) {
 
                 /* get the vals & pack them */
                 s->q_pack = (s->q_bits + 7) / 8 * s->dim;
-                s->q_val = malloc(s->q_pack * s->used_entries);
+                s->q_val = __malloc_heap_psram(s->q_pack * s->used_entries);
 
                 if(s->q_bits <= 8) {
                     for(i = 0; i < s->used_entries * s->dim; i++)
@@ -2145,17 +2149,17 @@ int vorbis_dsp_restart(vorbis_dsp_state *v) {
 vorbis_dsp_state *vorbis_dsp_create(vorbis_info *vi) {
     int i;
 
-    vorbis_dsp_state *v = (vorbis_dsp_state *)calloc(1, sizeof(*v));
+    vorbis_dsp_state *v = (vorbis_dsp_state *)__calloc_heap_psram(1, sizeof(*v));
     codec_setup_info *ci = (codec_setup_info *)vi->codec_setup;
 
     v->vi = vi;
 
-    v->work = (int32_t **)malloc(vi->channels * sizeof(*v->work));
-    v->mdctright = (int32_t **)malloc(vi->channels * sizeof(*v->mdctright));
+    v->work = (int32_t **)__malloc_heap_psram(vi->channels * sizeof(*v->work));
+    v->mdctright = (int32_t **)__malloc_heap_psram(vi->channels * sizeof(*v->mdctright));
 
     for(i = 0; i < vi->channels; i++) {
-        v->work[i] = (int32_t *)calloc(1, (ci->blocksizes[1] >> 1) * sizeof(*v->work[i]));
-        v->mdctright[i] = (int32_t *)calloc(1, (ci->blocksizes[1] >> 2) * sizeof(*v->mdctright[i]));
+        v->work[i] = (int32_t *)__calloc_heap_psram(1, (ci->blocksizes[1] >> 1) * sizeof(*v->work[i]));
+        v->mdctright[i] = (int32_t *)__calloc_heap_psram(1, (ci->blocksizes[1] >> 2) * sizeof(*v->mdctright[i]));
     }
 
     v->lW = 0; /* previous window size */
@@ -2611,7 +2615,7 @@ vorbis_info_floor *floor0_info_unpack(vorbis_info *vi, oggpack_buffer *opb) {
     codec_setup_info *ci = (codec_setup_info *)vi->codec_setup;
     int               j;
 
-    vorbis_info_floor0 *info = (vorbis_info_floor0 *)malloc(sizeof(*info));
+    vorbis_info_floor0 *info = (vorbis_info_floor0 *)__malloc_heap_psram(sizeof(*info));
     info->order = oggpack_read(opb, 8);
     info->rate = oggpack_read(opb, 16);
     info->barkmap = oggpack_read(opb, 16);
@@ -2706,7 +2710,7 @@ void vorbis_mergesort(uint8_t *index, uint16_t *vals, uint16_t n) {
     uint16_t i, j;
     uint8_t *temp;
     uint8_t *A = index;
-    uint8_t *B = (uint8_t *)malloc(n * sizeof(*B));
+    uint8_t *B = (uint8_t *)__malloc_heap_psram(n * sizeof(*B));
 
     for(i = 1; i < n; i <<= 1) {
         for(j = 0; j + i < n;) {
@@ -2741,17 +2745,17 @@ vorbis_info_floor *floor1_info_unpack(vorbis_info *vi, oggpack_buffer *opb) {
     codec_setup_info *ci = (codec_setup_info *)vi->codec_setup;
     int               j, k, count = 0, maxclass = -1, rangebits;
 
-    vorbis_info_floor1 *info = (vorbis_info_floor1 *)calloc(1, sizeof(*info));
+    vorbis_info_floor1 *info = (vorbis_info_floor1 *)__calloc_heap_psram(1, sizeof(*info));
     /* read partitions */
     info->partitions = oggpack_read(opb, 5); /* only 0 to 31 legal */
-    info->partitionclass = (uint8_t *)malloc(info->partitions * sizeof(*info->partitionclass));
+    info->partitionclass = (uint8_t *)__malloc_heap_psram(info->partitions * sizeof(*info->partitionclass));
     for(j = 0; j < info->partitions; j++) {
         info->partitionclass[j] = oggpack_read(opb, 4); /* only 0 to 15 legal */
         if(maxclass < info->partitionclass[j]) maxclass = info->partitionclass[j];
     }
 
     /* read partition classes */
-    info->_class = (floor1class *)malloc((uint32_t)(maxclass + 1) * sizeof(*info->_class));
+    info->_class = (floor1class *)__malloc_heap_psram((uint32_t)(maxclass + 1) * sizeof(*info->_class));
     for(j = 0; j < maxclass + 1; j++) {
         info->_class[j].class_dim = oggpack_read(opb, 3) + 1; /* 1 to 8 */
         info->_class[j].class_subs = oggpack_read(opb, 2);    /* 0,1,2,3 bits */
@@ -2771,10 +2775,10 @@ vorbis_info_floor *floor1_info_unpack(vorbis_info *vi, oggpack_buffer *opb) {
     rangebits = oggpack_read(opb, 4);
 
     for(j = 0, k = 0; j < info->partitions; j++) count += info->_class[info->partitionclass[j]].class_dim;
-    info->postlist = (uint16_t *)malloc((count + 2) * sizeof(*info->postlist));
-    info->forward_index = (uint8_t *)malloc((count + 2) * sizeof(*info->forward_index));
-    info->loneighbor = (uint8_t *)malloc(count * sizeof(*info->loneighbor));
-    info->hineighbor = (uint8_t *)malloc(count * sizeof(*info->hineighbor));
+    info->postlist = (uint16_t *)__malloc_heap_psram((count + 2) * sizeof(*info->postlist));
+    info->forward_index = (uint8_t *)__malloc_heap_psram((count + 2) * sizeof(*info->forward_index));
+    info->loneighbor = (uint8_t *)__malloc_heap_psram(count * sizeof(*info->loneighbor));
+    info->hineighbor = (uint8_t *)__malloc_heap_psram(count * sizeof(*info->hineighbor));
 
     count = 0;
     for(j = 0, k = 0; j < info->partitions; j++) {
@@ -3024,7 +3028,7 @@ int vorbis_info_blocksize(vorbis_info *vi, int zo) {
 /* used by synthesis, which has a full, alloced vi */
 void vorbis_info_init(vorbis_info *vi) {
     memset(vi, 0, sizeof(*vi));
-    vi->codec_setup = (codec_setup_info *)calloc(1, sizeof(codec_setup_info));
+    vi->codec_setup = (codec_setup_info *)__calloc_heap_psram(1, sizeof(codec_setup_info));
 }
 //---------------------------------------------------------------------------------------------------------------------
 void vorbis_info_clear(vorbis_info *vi) {
@@ -3105,18 +3109,18 @@ int _vorbis_unpack_comment(vorbis_comment *vc, oggpack_buffer *opb) {
     int i;
     int vendorlen = oggpack_read(opb, 32);
     if(vendorlen < 0) goto err_out;
-    vc->vendor = (char *)calloc(vendorlen + 1, 1);
+    vc->vendor = (char *)__calloc_heap_psram(vendorlen + 1, 1);
     _v_readstring(opb, vc->vendor, vendorlen);
     vc->comments = oggpack_read(opb, 32);
     if(vc->comments < 0) goto err_out;
-    vc->user_comments = (char **)calloc(vc->comments + 1, sizeof(*vc->user_comments));
-    vc->comment_lengths = (int *)calloc(vc->comments + 1, sizeof(*vc->comment_lengths));
+    vc->user_comments = (char **)__calloc_heap_psram(vc->comments + 1, sizeof(*vc->user_comments));
+    vc->comment_lengths = (int *)__calloc_heap_psram(vc->comments + 1, sizeof(*vc->comment_lengths));
 
     for(i = 0; i < vc->comments; i++) {
         int len = oggpack_read(opb, 32);
         if(len < 0) goto err_out;
         vc->comment_lengths[i] = len;
-        vc->user_comments[i] = (char *)calloc(len + 1, 1);
+        vc->user_comments[i] = (char *)__calloc_heap_psram(len + 1, 1);
         _v_readstring(opb, vc->user_comments[i], len);
     }
     if(oggpack_read(opb, 1) != 1) goto err_out;
@@ -3137,7 +3141,7 @@ int _vorbis_unpack_books(vorbis_info *vi, oggpack_buffer *opb) {
 
     /* codebooks */
     ci->books = oggpack_read(opb, 8) + 1;
-    ci->book_param = (codebook *)calloc(ci->books, sizeof(*ci->book_param));
+    ci->book_param = (codebook *)__calloc_heap_psram(ci->books, sizeof(*ci->book_param));
     for(i = 0; i < ci->books; i++)
         if(vorbis_book_unpack(opb, ci->book_param + i)) goto err_out;
 
@@ -3148,8 +3152,8 @@ int _vorbis_unpack_books(vorbis_info *vi, oggpack_buffer *opb) {
 
     /* floor backend settings */
     ci->floors = oggpack_read(opb, 6) + 1;
-    ci->floor_param = (vorbis_info_floor **)malloc(sizeof(*ci->floor_param) * ci->floors);
-    ci->floor_type = (int8_t*)malloc(sizeof(*ci->floor_type) * ci->floors);
+    ci->floor_param = (vorbis_info_floor **)__malloc_heap_psram(sizeof(*ci->floor_param) * ci->floors);
+    ci->floor_type = (int8_t*)__malloc_heap_psram(sizeof(*ci->floor_type) * ci->floors);
     for(i = 0; i < ci->floors; i++) {
         ci->floor_type[i] = oggpack_read(opb, 16);
         if(ci->floor_type[i] < 0 || ci->floor_type[i] >= VI_FLOORB) goto err_out;
@@ -3161,13 +3165,13 @@ int _vorbis_unpack_books(vorbis_info *vi, oggpack_buffer *opb) {
 
     /* residue backend settings */
     ci->residues = oggpack_read(opb, 6) + 1;
-    ci->residue_param = (vorbis_info_residue *)malloc(sizeof(*ci->residue_param) * ci->residues);
+    ci->residue_param = (vorbis_info_residue *)__malloc_heap_psram(sizeof(*ci->residue_param) * ci->residues);
     for(i = 0; i < ci->residues; i++)
         if(res_unpack(ci->residue_param + i, vi, opb)) goto err_out;
 
     /* map backend settings */
     ci->maps = oggpack_read(opb, 6) + 1;
-    ci->map_param = (vorbis_info_mapping *)malloc(sizeof(*ci->map_param) * ci->maps);
+    ci->map_param = (vorbis_info_mapping *)__malloc_heap_psram(sizeof(*ci->map_param) * ci->maps);
     for(i = 0; i < ci->maps; i++) {
         if(oggpack_read(opb, 16) != 0) goto err_out;
         if(mapping_info_unpack(ci->map_param + i, vi, opb)) goto err_out;
@@ -3175,7 +3179,7 @@ int _vorbis_unpack_books(vorbis_info *vi, oggpack_buffer *opb) {
 
     /* mode settings */
     ci->modes = oggpack_read(opb, 6) + 1;
-    ci->mode_param = (vorbis_info_mode *)malloc(ci->modes * sizeof(*ci->mode_param));
+    ci->mode_param = (vorbis_info_mode *)__malloc_heap_psram(ci->modes * sizeof(*ci->mode_param));
     for(i = 0; i < ci->modes; i++) {
         ci->mode_param[i].blockflag = oggpack_read(opb, 1);
         if(oggpack_read(opb, 16)) goto err_out;
@@ -3274,7 +3278,7 @@ int mapping_info_unpack(vorbis_info_mapping *info, vorbis_info *vi, oggpack_buff
 
     if(oggpack_read(opb, 1)) {
         info->coupling_steps = oggpack_read(opb, 8) + 1;
-        info->coupling = (coupling_step *)malloc(info->coupling_steps * sizeof(*info->coupling));
+        info->coupling = (coupling_step *)__malloc_heap_psram(info->coupling_steps * sizeof(*info->coupling));
 
         for(i = 0; i < info->coupling_steps; i++) {
             int testM = info->coupling[i].mag = oggpack_read(opb, ilog(vi->channels));
@@ -3288,14 +3292,14 @@ int mapping_info_unpack(vorbis_info_mapping *info, vorbis_info *vi, oggpack_buff
     /* 2,3:reserved */
 
     if(info->submaps > 1) {
-        info->chmuxlist = (uint8_t *)malloc(sizeof(*info->chmuxlist) * vi->channels);
+        info->chmuxlist = (uint8_t *)__malloc_heap_psram(sizeof(*info->chmuxlist) * vi->channels);
         for(i = 0; i < vi->channels; i++) {
             info->chmuxlist[i] = oggpack_read(opb, 4);
             if(info->chmuxlist[i] >= info->submaps) goto err_out;
         }
     }
 
-    info->submaplist = (submap *)malloc(sizeof(*info->submaplist) * info->submaps);
+    info->submaplist = (submap *)__malloc_heap_psram(sizeof(*info->submaplist) * info->submaps);
     for(i = 0; i < info->submaps; i++) {
         int temp = oggpack_read(opb, 8);
         (void)temp;
@@ -3923,8 +3927,8 @@ int res_unpack(vorbis_info_residue *info, vorbis_info *vi, oggpack_buffer *opb) 
     info->groupbook = oggpack_read(opb, 8);
     if(info->groupbook >= ci->books) goto errout;
 
-    info->stagemasks = (uint8_t *)malloc(info->partitions * sizeof(*info->stagemasks));
-    info->stagebooks = (uint8_t *)malloc(info->partitions * 8 * sizeof(*info->stagebooks));
+    info->stagemasks = (uint8_t *)__malloc_heap_psram(info->partitions * sizeof(*info->stagemasks));
+    info->stagebooks = (uint8_t *)__malloc_heap_psram(info->partitions * 8 * sizeof(*info->stagebooks));
 
     for(j = 0; j < info->partitions; j++) {
         int cascade = oggpack_read(opb, 3);

@@ -24,6 +24,11 @@
 
 File audiofile;
 
+#define __malloc_heap_psram(size) \
+    heap_caps_malloc_prefer(size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+#define __calloc_heap_psram(ch, size) \
+    heap_caps_calloc_prefer(ch, size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
+
 /* A 'chained bitstream' is a Vorbis bitstream that contains more than one logical bitstream arranged end to end (the
  only form of Ogg multiplexing allowed in a Vorbis bitstream; grouping [parallel  multiplexing] is not allowed in
  Vorbis). A Vorbis file can be played beginning to end (streamed) without worrying ahead of time about chaining (see
@@ -214,8 +219,8 @@ int _bisect_forward_serialno(OggVorbis_File *vf, int64_t begin, int64_t searched
     if(searched >= end || ret < 0) {
         ogg_page_release(&og);
         vf->links = m + 1;
-        vf->offsets = (int64_t *)malloc((vf->links + 1) * sizeof(*vf->offsets));
-        vf->serialnos = (uint32_t *)malloc(vf->links * sizeof(*vf->serialnos));
+        vf->offsets = (int64_t *)__malloc_heap_psram((vf->links + 1) * sizeof(*vf->offsets));
+        vf->serialnos = (uint32_t *)__malloc_heap_psram(vf->links * sizeof(*vf->serialnos));
         vf->offsets[m + 1] = searched;
     }
     else {
@@ -300,8 +305,8 @@ void _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset) {
     int      i;
     int64_t  ret;
 
-    vf->dataoffsets = (int64_t *)malloc(vf->links * sizeof(*vf->dataoffsets));
-    vf->pcmlengths = (int64_t *)malloc(vf->links * 2 * sizeof(*vf->pcmlengths));
+    vf->dataoffsets = (int64_t *)__malloc_heap_psram(vf->links * sizeof(*vf->dataoffsets));
+    vf->pcmlengths = (int64_t *)__malloc_heap_psram(vf->links * 2 * sizeof(*vf->pcmlengths));
 
     for(i = 0; i < vf->links; i++) {
         if(i == 0) {
@@ -797,7 +802,7 @@ ogg_reference_t *_fetch_ref(ogg_buffer_state_t *bs) {
     }
     else {
         /* allocate a new reference */
-        _or = (ogg_reference_t *)malloc(sizeof(*_or));
+        _or = (ogg_reference_t *)__malloc_heap_psram(sizeof(*_or));
     }
 
     _or->begin = 0;
@@ -823,8 +828,8 @@ ogg_buffer_t *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes) {
     }
     else {
         /* allocate a new buffer */
-        ob = (ogg_buffer_t *)malloc(sizeof(*ob));
-        ob->data = (uint8_t *)malloc(bytes < 16 ? 16 : bytes);
+        ob = (ogg_buffer_t *)__malloc_heap_psram(sizeof(*ob));
+        ob->data = (uint8_t *)__malloc_heap_psram(bytes < 16 ? 16 : bytes);
         ob->size = bytes;
     }
 
@@ -1498,12 +1503,12 @@ void _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os) {
 // consumed in reference form.
 
 ogg_buffer_state_t *ogg_buffer_create(void) {
-    ogg_buffer_state_t *bs = (ogg_buffer_state_t *)calloc(1, sizeof(*bs));
+    ogg_buffer_state_t *bs = (ogg_buffer_state_t *)__calloc_heap_psram(1, sizeof(*bs));
     return bs;
 }
 //---------------------------------------------------------------------------------------------------------------------
 ogg_sync_state_t *ogg_sync_create(void) {
-    ogg_sync_state_t *oy = (ogg_sync_state_t *)calloc(1, sizeof(*oy));
+    ogg_sync_state_t *oy = (ogg_sync_state_t *)__calloc_heap_psram(1, sizeof(*oy));
     memset(oy, 0, sizeof(*oy));
     oy->bufferpool = ogg_buffer_create();
     return oy;
@@ -1520,7 +1525,7 @@ int ogg_sync_destroy(ogg_sync_state_t *oy) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 ogg_stream_state_t *ogg_stream_create(int serialno) {
-    ogg_stream_state_t *os = (ogg_stream_state_t *)calloc(1, sizeof(*os));
+    ogg_stream_state_t *os = (ogg_stream_state_t *)__calloc_heap_psram(1, sizeof(*os));
     os->serialno = serialno;
     os->pageno = -1;
     return os;

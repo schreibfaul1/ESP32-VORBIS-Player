@@ -72,7 +72,7 @@
 //---------------------------------------------------------------------------------------------------------------------
 typedef struct codebook{
     uint8_t  dim;          /* codebook dimensions (elements per vector) */
-    int16_t entries;       /* codebook entries */
+    int16_t  entries;      /* codebook entries */
     uint16_t used_entries; /* populated codebook entries */
     uint32_t dec_maxlength;
     void    *dec_table;
