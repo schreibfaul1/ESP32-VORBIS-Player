@@ -259,7 +259,6 @@ int     _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, 
 void    _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset);
 int     _make_decode_ready(OggVorbis_File *vf);
 int     _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp);
-int     _ov_open1(File* fIn, OggVorbis_File *vf);
 int     ov_clear(OggVorbis_File *vf);
 int     ov_open(File* fIn, OggVorbis_File *vf);
 int32_t ov_bitrate(OggVorbis_File *vf, int i);

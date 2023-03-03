@@ -535,31 +535,6 @@ cleanup:
     return ret;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int _ov_open1(File* f, OggVorbis_File *vf) {
-    int ret;
-
-    memset(vf, 0, sizeof(*vf));
-
-    vf->datasource = f;
-
-    /* init the framing state */
-    vf->oy = ogg_sync_create();
-
-    /* No seeking yet; Set up a 'single' (current) logical bitstream entry for partial open */
-    vf->links = 1;
-    vf->os = ogg_stream_create(-1); /* fill in the serialno later */
-
-    /* Try to fetch the headers, maintaining all the storage */
-    if((ret = _fetch_headers(vf, &vf->vi, &vf->vc, &vf->current_serialno, NULL)) < 0) {
-        vf->datasource = NULL;
-        ov_clear(vf);
-    }
-    else if(vf->ready_state < PARTOPEN)
-        vf->ready_state = PARTOPEN;
-
-    return ret;
-}
-//---------------------------------------------------------------------------------------------------------------------
 /* clear out the OggVorbis_File struct */
 int ov_clear(OggVorbis_File *vf) {
     if(vf) {
@@ -581,7 +556,27 @@ int ov_clear(OggVorbis_File *vf) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 int ov_open(File* fIn, OggVorbis_File *vf) {
-    int ret = _ov_open1(fIn, vf);
+
+    int ret;
+    memset(vf, 0, sizeof(*vf));
+
+    vf->datasource = fIn;
+
+    /* init the framing state */
+    vf->oy = ogg_sync_create();
+
+    /* No seeking yet; Set up a 'single' (current) logical bitstream entry for partial open */
+    vf->links = 1;
+    vf->os = ogg_stream_create(-1); /* fill in the serialno later */
+
+    /* Try to fetch the headers, maintaining all the storage */
+    if((ret = _fetch_headers(vf, &vf->vi, &vf->vc, &vf->current_serialno, NULL)) < 0) {
+        vf->datasource = NULL;
+        ov_clear(vf);
+    }
+    else if(vf->ready_state < PARTOPEN)
+        vf->ready_state = PARTOPEN;
+
     if(ret) return ret;
     if(vf->ready_state < OPENED) vf->ready_state = OPENED;
     return 0;
