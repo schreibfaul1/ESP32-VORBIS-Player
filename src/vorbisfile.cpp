@@ -592,7 +592,6 @@ int ov_open(File* fIn, OggVorbis_File *vf) {
     vf->datasource = fIn;
 
     /* init the framing state */
-    s_oggSyncState->bufferpool = s_oggBufferState;
     vf->oy = s_oggSyncState;
 
     /* No seeking yet; Set up a 'single' (current) logical bitstream entry for partial open */
@@ -748,7 +747,7 @@ uint8_t *ogg_sync_bufferin(ogg_sync_state_t *oy, int32_t bytes) {
 
     /* base case; fifo uninitialized */
     if(!oy->fifo_head) {
-        oy->fifo_head = oy->fifo_tail = ogg_buffer_alloc(oy->bufferpool, bytes);
+        oy->fifo_head = oy->fifo_tail = ogg_buffer_alloc(s_oggBufferState, bytes);
         return oy->fifo_head->buffer->data;
     }
 
@@ -764,7 +763,7 @@ uint8_t *ogg_sync_bufferin(ogg_sync_state_t *oy, int32_t bytes) {
 
     /* current fragment used/full; get new fragment */
     {
-        ogg_reference_t *_new = ogg_buffer_alloc(oy->bufferpool, bytes);
+        ogg_reference_t *_new = ogg_buffer_alloc(s_oggBufferState, bytes);
         oy->fifo_head->next = _new;
         oy->fifo_head = _new;
     }
@@ -1492,7 +1491,7 @@ void _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os) {
 int ogg_sync_destroy(ogg_sync_state_t *oy) {
     if(oy) {
         ogg_sync_reset(oy);
-        ogg_buffer_destroy(oy->bufferpool);
+        ogg_buffer_destroy(s_oggBufferState);
         memset(oy, 0, sizeof(*oy));
         free(oy);
     }

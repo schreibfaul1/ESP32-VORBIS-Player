@@ -75,7 +75,7 @@ typedef struct oggbyte_buffer{
 
 typedef struct ogg_sync_state{
     /* decode memory management pool */
-    ogg_buffer_state_t *bufferpool;
+//    ogg_buffer_state_t *bufferpool;
 
     /* stream buffers */
     ogg_reference_t *fifo_head;
