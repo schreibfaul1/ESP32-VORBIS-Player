@@ -231,7 +231,7 @@ typedef struct OggVorbis_File{
 //    int                 seekable;
     int64_t             offset;
     int64_t             end;
-    ogg_sync_state_t   *oy;     // If the FILE handle isn't seekable (eg, a pipe), only the current
+//    ogg_sync_state_t   *oy;     // If the FILE handle isn't seekable (eg, a pipe), only the current
     int                 links;  // stream appears */
     int64_t            *offsets;
     int64_t            *dataoffsets;
@@ -276,7 +276,7 @@ int32_t         ov_read(OggVorbis_File *vf, void *outBuff, int bytes_req);
 void                _ogg_buffer_destroy(ogg_buffer_state_t *bs);
 void                ogg_buffer_destroy(ogg_buffer_state_t *bs);
 ogg_buffer_t       *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes);
-uint8_t            *ogg_sync_bufferin(ogg_sync_state_t *oy, int32_t bytes);
+uint8_t            *ogg_sync_bufferin(int32_t bytes);
 ogg_reference_t    *ogg_buffer_alloc(ogg_buffer_state_t *bs, int32_t bytes);
 void                ogg_buffer_realloc(ogg_reference_t *_or, int32_t bytes);
 ogg_reference_t    *_fetch_ref(ogg_buffer_state_t *bs);
@@ -284,7 +284,7 @@ int                 ogg_sync_wrote(ogg_sync_state_t *oy, int32_t bytes);
 int                 ogg_sync_reset(ogg_sync_state_t *oy);
 void                ogg_buffer_release(ogg_reference_t *_or);
 void                ogg_buffer_release_one(ogg_reference_t *_or);
-int32_t             ogg_sync_pageseek(ogg_sync_state_t *oy, ogg_page *og);
+int32_t             ogg_sync_pageseek(ogg_page *og);
 int                 oggbyte_init(oggbyte_buffer_t *b, ogg_reference_t *_or);
 uint8_t             oggbyte_read1(oggbyte_buffer_t *b, int pos);
 int64_t             oggbyte_read8(oggbyte_buffer_t *b, int pos);

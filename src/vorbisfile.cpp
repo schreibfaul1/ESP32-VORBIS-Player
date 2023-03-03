@@ -116,12 +116,12 @@ const uint32_t crc_lookup[256] = {
 int32_t _get_data(OggVorbis_File *vf) {
     errno = 0;
     if(vf->datasource) {
-        uint8_t *buffer = ogg_sync_bufferin(vf->oy, CHUNKSIZE);
+        uint8_t *buffer = ogg_sync_bufferin(CHUNKSIZE);
 
         int32_t  bytes = vf->datasource->readBytes((char*)buffer, CHUNKSIZE);
         if(bytes != CHUNKSIZE) {log_e("eof"); return -2;} // esp32 (-1) if eof
         if(bytes <  0){log_e("eof"); return -2;}          // esp32 (-1) if eof
-        if(bytes > 0) ogg_sync_wrote(vf->oy, bytes);
+        if(bytes > 0) ogg_sync_wrote(s_oggSyncState, bytes);
         if(bytes == 0) return -1;
 
         return bytes;
@@ -147,7 +147,7 @@ int64_t _get_next_page(OggVorbis_File *vf, ogg_page *og, int64_t boundary) {
         int32_t more;
 
         if(boundary > 0 && vf->offset >= boundary) return OV_FALSE;
-        more = ogg_sync_pageseek(vf->oy, og);
+        more = ogg_sync_pageseek(og);
 
         if(more < 0) {          /* skipped n bytes */
             vf->offset -= more;
@@ -576,7 +576,7 @@ int ov_clear(OggVorbis_File *vf) {
         if(vf->pcmlengths) free(vf->pcmlengths);
         if(vf->serialnos) free(vf->serialnos);
         if(vf->offsets) free(vf->offsets);
-        ogg_sync_destroy(vf->oy);
+        ogg_sync_destroy(s_oggSyncState);
 
         if(vf->datasource)  vf->datasource->close();
         memset(vf, 0, sizeof(*vf));
@@ -590,9 +590,6 @@ int ov_open(File* fIn, OggVorbis_File *vf) {
     memset(vf, 0, sizeof(*vf));
 
     vf->datasource = fIn;
-
-    /* init the framing state */
-    vf->oy = s_oggSyncState;
 
     /* No seeking yet; Set up a 'single' (current) logical bitstream entry for partial open */
     vf->links = 1;
@@ -737,7 +734,7 @@ int32_t ov_read(OggVorbis_File *vf, void *outBuff, int bytes_req) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-uint8_t *ogg_sync_bufferin(ogg_sync_state_t *oy, int32_t bytes) {
+uint8_t *ogg_sync_bufferin(int32_t bytes) {
     /* [allocate and] expose a buffer for data submission.
 
      If there is no head fragment allocate one and expose it else if the current head fragment has sufficient unused
@@ -746,28 +743,28 @@ uint8_t *ogg_sync_bufferin(ogg_sync_state_t *oy, int32_t bytes) {
      */
 
     /* base case; fifo uninitialized */
-    if(!oy->fifo_head) {
-        oy->fifo_head = oy->fifo_tail = ogg_buffer_alloc(s_oggBufferState, bytes);
-        return oy->fifo_head->buffer->data;
+    if(!s_oggSyncState->fifo_head) {
+        s_oggSyncState->fifo_head = s_oggSyncState->fifo_tail = ogg_buffer_alloc(s_oggBufferState, bytes);
+        return s_oggSyncState->fifo_head->buffer->data;
     }
 
     /* space left in current fragment case */
-    if(oy->fifo_head->buffer->size - oy->fifo_head->length - oy->fifo_head->begin >= bytes)
-        return oy->fifo_head->buffer->data + oy->fifo_head->length + oy->fifo_head->begin;
+    if(s_oggSyncState->fifo_head->buffer->size - s_oggSyncState->fifo_head->length - s_oggSyncState->fifo_head->begin >= bytes)
+        return s_oggSyncState->fifo_head->buffer->data + s_oggSyncState->fifo_head->length + s_oggSyncState->fifo_head->begin;
 
     /* current fragment is unused, but too small */
-    if(!oy->fifo_head->length) {
-        ogg_buffer_realloc(oy->fifo_head, bytes);
-        return oy->fifo_head->buffer->data + oy->fifo_head->begin;
+    if(!s_oggSyncState->fifo_head->length) {
+        ogg_buffer_realloc(s_oggSyncState->fifo_head, bytes);
+        return s_oggSyncState->fifo_head->buffer->data + s_oggSyncState->fifo_head->begin;
     }
 
     /* current fragment used/full; get new fragment */
     {
         ogg_reference_t *_new = ogg_buffer_alloc(s_oggBufferState, bytes);
-        oy->fifo_head->next = _new;
-        oy->fifo_head = _new;
+        s_oggSyncState->fifo_head->next = _new;
+        s_oggSyncState->fifo_head = _new;
     }
-    return oy->fifo_head->buffer->data;
+    return s_oggSyncState->fifo_head->buffer->data;
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* fetch a reference pointing to a fresh, initially continguous buffer
@@ -929,16 +926,16 @@ void ogg_buffer_destroy(ogg_buffer_state_t *bs) {
  0) page not ready; more data (no bytes skipped)
  n) page synced at current location; page length n bytes */
 
-int32_t ogg_sync_pageseek(ogg_sync_state_t *oy, ogg_page *og) {
+int32_t ogg_sync_pageseek(ogg_page *og) {
     oggbyte_buffer_t page;
     int32_t          bytes, ret = 0;
 
     ogg_page_release(og);
 
-    bytes = oy->fifo_fill;
-    oggbyte_init(&page, oy->fifo_tail);
+    bytes = s_oggSyncState->fifo_fill;
+    oggbyte_init(&page, s_oggSyncState->fifo_tail);
 
-    if(oy->headerbytes == 0) {
+    if(s_oggSyncState->headerbytes == 0) {
         if(bytes < 27) goto sync_out;
         /* not enough for even a minimal header */
 
@@ -947,18 +944,18 @@ int32_t ogg_sync_pageseek(ogg_sync_state_t *oy, ogg_page *og) {
            oggbyte_read1(&page, 2) != (int)'g' || oggbyte_read1(&page, 3) != (int)'S')
             goto sync_fail;
 
-        oy->headerbytes = oggbyte_read1(&page, 26) + 27;
+        s_oggSyncState->headerbytes = oggbyte_read1(&page, 26) + 27;
     }
-    if(bytes < oy->headerbytes) goto sync_out;
+    if(bytes < s_oggSyncState->headerbytes) goto sync_out;
     /* not enough for header +
      seg table */
-    if(oy->bodybytes == 0) {
+    if(s_oggSyncState->bodybytes == 0) {
         int i;
         /* count up body length in the segment table */
-        for(i = 0; i < oy->headerbytes - 27; i++) oy->bodybytes += oggbyte_read1(&page, 27 + i);
+        for(i = 0; i < s_oggSyncState->headerbytes - 27; i++) s_oggSyncState->bodybytes += oggbyte_read1(&page, 27 + i);
     }
 
-    if(oy->bodybytes + oy->headerbytes > bytes) goto sync_out;
+    if(s_oggSyncState->bodybytes + s_oggSyncState->headerbytes > bytes) goto sync_out;
 
     /* we have what appears to be a complete page; last test: verify checksum */
     {
@@ -966,7 +963,7 @@ int32_t ogg_sync_pageseek(ogg_sync_state_t *oy, ogg_page *og) {
         oggbyte_set4(&page, 0, 22);
 
         /* Compare checksums; memory continues to be common access */
-        if(chksum != _checksum(oy->fifo_tail, oy->bodybytes + oy->headerbytes)) {
+        if(chksum != _checksum(s_oggSyncState->fifo_tail, s_oggSyncState->bodybytes + s_oggSyncState->headerbytes)) {
             /* D'oh.  Mismatch! Corrupt page (_or miscapture and not a page at all). replace the computed checksum with
              the one actually read in; remember all the memory is common access */
 
@@ -979,54 +976,54 @@ int32_t ogg_sync_pageseek(ogg_sync_state_t *oy, ogg_page *og) {
     /* We have a page.  Set up page return. */
     if(og) {
         /* set up page output */
-        og->header = ogg_buffer_split(&oy->fifo_tail, &oy->fifo_head, oy->headerbytes);
-        og->header_len = oy->headerbytes;
-        og->body = ogg_buffer_split(&oy->fifo_tail, &oy->fifo_head, oy->bodybytes);
-        og->body_len = oy->bodybytes;
+        og->header = ogg_buffer_split(&s_oggSyncState->fifo_tail, &s_oggSyncState->fifo_head, s_oggSyncState->headerbytes);
+        og->header_len = s_oggSyncState->headerbytes;
+        og->body = ogg_buffer_split(&s_oggSyncState->fifo_tail, &s_oggSyncState->fifo_head, s_oggSyncState->bodybytes);
+        og->body_len = s_oggSyncState->bodybytes;
     }
     else {
         /* simply advance */
-        oy->fifo_tail = ogg_buffer_pretruncate(oy->fifo_tail, oy->headerbytes + oy->bodybytes);
-        if(!oy->fifo_tail) oy->fifo_head = 0;
+        s_oggSyncState->fifo_tail = ogg_buffer_pretruncate(s_oggSyncState->fifo_tail, s_oggSyncState->headerbytes + s_oggSyncState->bodybytes);
+        if(!s_oggSyncState->fifo_tail) s_oggSyncState->fifo_head = 0;
     }
 
-    ret = oy->headerbytes + oy->bodybytes;
-    oy->unsynced = 0;
-    oy->headerbytes = 0;
-    oy->bodybytes = 0;
-    oy->fifo_fill -= ret;
+    ret = s_oggSyncState->headerbytes + s_oggSyncState->bodybytes;
+    s_oggSyncState->unsynced = 0;
+    s_oggSyncState->headerbytes = 0;
+    s_oggSyncState->bodybytes = 0;
+    s_oggSyncState->fifo_fill -= ret;
 
     return ret;
 
 sync_fail:
 
-    oy->headerbytes = 0;
-    oy->bodybytes = 0;
-    oy->fifo_tail = ogg_buffer_pretruncate(oy->fifo_tail, 1);
+    s_oggSyncState->headerbytes = 0;
+    s_oggSyncState->bodybytes = 0;
+    s_oggSyncState->fifo_tail = ogg_buffer_pretruncate(s_oggSyncState->fifo_tail, 1);
     ret--;
 
     /* search forward through fragments for possible capture */
-    while(oy->fifo_tail) {
+    while(s_oggSyncState->fifo_tail) {
         /* invariant: fifo_cursor points to a position in fifo_tail */
-        uint8_t *now = oy->fifo_tail->buffer->data + oy->fifo_tail->begin;
-        uint8_t *next = (uint8_t *)memchr(now, 'O', oy->fifo_tail->length);
+        uint8_t *now = s_oggSyncState->fifo_tail->buffer->data + s_oggSyncState->fifo_tail->begin;
+        uint8_t *next = (uint8_t *)memchr(now, 'O', s_oggSyncState->fifo_tail->length);
 
         if(next) {
             /* possible capture in this segment */
             int32_t bytes = next - now;
-            oy->fifo_tail = ogg_buffer_pretruncate(oy->fifo_tail, bytes);
+            s_oggSyncState->fifo_tail = ogg_buffer_pretruncate(s_oggSyncState->fifo_tail, bytes);
             ret -= bytes;
             break;
         }
         else {
             /* no capture.  advance to next segment */
-            int32_t bytes = oy->fifo_tail->length;
+            int32_t bytes = s_oggSyncState->fifo_tail->length;
             ret -= bytes;
-            oy->fifo_tail = ogg_buffer_pretruncate(oy->fifo_tail, bytes);
+            s_oggSyncState->fifo_tail = ogg_buffer_pretruncate(s_oggSyncState->fifo_tail, bytes);
         }
     }
-    if(!oy->fifo_tail) oy->fifo_head = 0;
-    oy->fifo_fill += ret;
+    if(!s_oggSyncState->fifo_tail) s_oggSyncState->fifo_head = 0;
+    s_oggSyncState->fifo_fill += ret;
 
 sync_out:
     return ret;
