@@ -314,7 +314,6 @@ int                 _packetout(ogg_stream_state_t *os, ogg_packet *op, int adv);
 void                _span_queued_page(ogg_stream_state_t *os);
 void                _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os);
 int                 ogg_sync_destroy();
-ogg_stream_state_t *ogg_stream_create(int serialno);
 int                 ogg_stream_destroy(ogg_stream_state_t *os);
 int                 ogg_stream_reset(ogg_stream_state_t *os);
 void                ogg_page_dup(ogg_page *dup, ogg_page *orig);

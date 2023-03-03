@@ -593,7 +593,10 @@ int ov_open(File* fIn, OggVorbis_File *vf) {
 
     /* No seeking yet; Set up a 'single' (current) logical bitstream entry for partial open */
     vf->links = 1;
-    vf->os = ogg_stream_create(-1); /* fill in the serialno later */
+
+    vf->os =(ogg_stream_state_t *)__calloc_heap_psram(1, sizeof(ogg_stream_state_t));
+    vf->os->serialno = -1; // serialno;
+    vf->os->pageno = -1;
 
     /* Try to fetch the headers, maintaining all the storage */
     if((ret = _fetch_headers(vf, &vf->vi, &vf->vc, &vf->current_serialno, NULL)) < 0) {
@@ -1493,13 +1496,6 @@ int ogg_sync_destroy() {
         free(s_oggSyncState);
     }
     return OGG_SUCCESS;
-}
-//---------------------------------------------------------------------------------------------------------------------
-ogg_stream_state_t *ogg_stream_create(int serialno) {
-    ogg_stream_state_t *os = (ogg_stream_state_t *)__calloc_heap_psram(1, sizeof(*os));
-    os->serialno = serialno;
-    os->pageno = -1;
-    return os;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int ogg_stream_destroy(ogg_stream_state_t *os) {
