@@ -29,30 +29,29 @@
 #define OGG_EINVAL   -14
 #define OGG_EEOS     -15
 
-typedef struct ogg_buffer_state{
+typedef struct ogg_buffer_state {
     struct ogg_buffer    *unused_buffers;
     struct ogg_reference *unused_references;
     int                   outstanding;
     int                   shutdown;
 } ogg_buffer_state_t;
 
-typedef struct ogg_buffer{
-    uint8_t *data;
-    int32_t  size;
-    int      refcount;
+typedef struct ogg_buffer {
+    uint8_t            *data;
+    int32_t             size;
+    int                 refcount;
     ogg_buffer_state_t *owner;
     struct ogg_buffer  *next;
 } ogg_buffer_t;
 
-typedef struct ogg_reference{
-    ogg_buffer_t *buffer;
-    int32_t       begin;
-    int32_t       length;
+typedef struct ogg_reference {
+    ogg_buffer_t         *buffer;
+    int32_t               begin;
+    int32_t               length;
     struct ogg_reference *next;
 } ogg_reference_t;
 
-typedef struct oggpack_buffer
-{
+typedef struct oggpack_buffer {
     int      headbit;
     uint8_t *headptr;
     int32_t  headend;
@@ -65,7 +64,7 @@ typedef struct oggpack_buffer
     int32_t count; /* doesn't count the tail */
 } oggpack_buffer_t;
 
-typedef struct oggbyte_buffer{
+typedef struct oggbyte_buffer {
     ogg_reference_t *baseref;
     ogg_reference_t *ref;
     uint8_t         *ptr;
@@ -120,18 +119,15 @@ typedef struct ogg_stream_state{
 
 } ogg_stream_state_t;
 
-typedef struct
-{
+typedef struct {
     ogg_reference_t *packet;
     int32_t          bytes;
     int32_t          b_o_s;
     int32_t          e_o_s;
     int64_t          granulepos;
-    int64_t          packetno; /* sequence number for decode; the framing
-                                      knows where there's a hole in the data,
-                                      but we need coupling so that the codec
-                                      (which is in a seperate abstraction
-                                      layer) also knows about the gap */
+    int64_t          packetno; /* sequence number for decode; the framing knows where there's a hole in the data,
+                                  but we need coupling so that the codec (which is in a seperate abstraction
+                                  layer) also knows about the gap */
 } ogg_packet;
 
 typedef struct{
@@ -197,7 +193,7 @@ typedef struct{
     int          mult; /* 1 2 3 or 4 */
 } vorbis_info_floor1;
 
-typedef struct vorbis_info_residue{
+typedef struct vorbis_info_residue {
     int      type;
     uint8_t *stagemasks;
     uint8_t *stagebooks;
@@ -211,12 +207,12 @@ typedef struct vorbis_info_residue{
     char     stages;
 } vorbis_info_residue;
 
-typedef struct{  // mode
+typedef struct {  // mode
     uint8_t blockflag;
     uint8_t mapping;
 } vorbis_info_mode;
 
-typedef struct vorbis_comment{
+typedef struct vorbis_comment {
     char **user_comments;
     int   *comment_lengths;
     int    comments;
@@ -226,11 +222,11 @@ typedef struct vorbis_comment{
 struct vorbis_dsp_state;
 typedef struct vorbis_dsp_state vorbis_dsp_state;
 
-typedef struct OggVorbis_File{
+typedef struct OggVorbis_File {
     File               *datasource; /* Pointer to a FILE *, etc. */
     int64_t             offset;
     int64_t             end;
-    int                 links;  // stream appears */
+    int                 links;  // stream appears
     int64_t            *offsets;
     int64_t            *dataoffsets;
     uint32_t           *serialnos;
@@ -243,7 +239,7 @@ typedef struct OggVorbis_File{
     int                 current_link;
     int64_t             bittrack;
     int64_t             samptrack;
-    ogg_stream_state_t *os; /* take physical pages, weld into a logical stream of packets */
+//    ogg_stream_state_t *os; /* take physical pages, weld into a logical stream of packets */
     vorbis_dsp_state   *vd; /* central working state for the packet->PCM decoder */
 } OggVorbis_File;
 
@@ -303,19 +299,19 @@ int64_t             ogg_page_granulepos(ogg_page *og);
 uint32_t            ogg_page_serialno(ogg_page *og);
 uint32_t            ogg_page_pageno(ogg_page *og);
 int                 ogg_page_release(ogg_page *og);
-int                 ogg_stream_reset_serialno(ogg_stream_state_t *os, int serialno);
-int                 ogg_stream_pagein(ogg_stream_state_t *os, ogg_page *og);
+int                 ogg_stream_reset_serialno(int serialno);
+int                 ogg_stream_pagein(ogg_page *og);
 ogg_reference_t    *ogg_buffer_walk(ogg_reference_t *_or);
 ogg_reference_t    *ogg_buffer_cat(ogg_reference_t *tail, ogg_reference_t *head);
-int                 ogg_stream_packetout(ogg_stream_state_t *os, ogg_packet *op);
-int                 ogg_stream_packetpeek(ogg_stream_state_t *os, ogg_packet *op);
+int                 ogg_stream_packetout(ogg_packet *op);
+int                 ogg_stream_packetpeek(ogg_packet *op);
 int                 ogg_packet_release(ogg_packet *op);
-int                 _packetout(ogg_stream_state_t *os, ogg_packet *op, int adv);
-void                _span_queued_page(ogg_stream_state_t *os);
-void                _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os);
+int                 _packetout(ogg_packet *op, int adv);
+void                _span_queued_page();
+void                _next_lace(oggbyte_buffer_t *ob);
 int                 ogg_sync_destroy();
-int                 ogg_stream_destroy(ogg_stream_state_t *os);
-int                 ogg_stream_reset(ogg_stream_state_t *os);
+int                 ogg_stream_destroy();
+int                 ogg_stream_reset();
 void                ogg_page_dup(ogg_page *dup, ogg_page *orig);
 ogg_reference_t    *ogg_buffer_dup(ogg_reference_t *_or);
 

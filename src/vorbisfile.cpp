@@ -32,13 +32,15 @@ File audiofile;
 
 ogg_sync_state_t*   s_oggSyncState = NULL;
 ogg_buffer_state_t* s_oggBufferState = NULL;
+ogg_stream_state_t* s_oggStreamState = NULL;
 //---------------------------------------------------------------------------------------------------------------------
 bool VORBISDecoder_AllocateBuffers(void){
 
     if(!s_oggSyncState)   {s_oggSyncState   = (ogg_sync_state_t*)   __calloc_heap_psram(1, sizeof(ogg_sync_state_t));}
     if(!s_oggBufferState) {s_oggBufferState = (ogg_buffer_state_t*) __calloc_heap_psram(1, sizeof(ogg_buffer_state_t));}
+    if(!s_oggStreamState) {s_oggStreamState = (ogg_stream_state_t *)__calloc_heap_psram(1, sizeof(ogg_stream_state_t));}
 
-    if(!s_oggSyncState || !s_oggBufferState){
+    if(!s_oggSyncState || !s_oggBufferState || !s_oggStreamState){
         log_e("not enough memory to allocate vorbisdecoder buffers");
         return false;
     }
@@ -55,6 +57,7 @@ void VORBISDecoder_ClearBuffer(){
 void VORBISDecoder_FreeBuffers(){
     if(s_oggSyncState)    {free(s_oggSyncState);    s_oggSyncState    = NULL;}
     if(s_oggBufferState)  {free(s_oggBufferState);  s_oggBufferState  = NULL;}
+    if(s_oggStreamState)  {free(s_oggStreamState);  s_oggStreamState  = NULL;}
 }
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -265,8 +268,8 @@ int _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, uint
         og_ptr = &og;
     }
 
-    ogg_stream_reset_serialno(vf->os, ogg_page_serialno(og_ptr));
-    if(serialno) *serialno = vf->os->serialno;
+    ogg_stream_reset_serialno(ogg_page_serialno(og_ptr));
+    if(serialno) *serialno = s_oggStreamState->serialno;
 
     /* extract the initial header from the first page and verify that the
      Ogg bitstream is in fact Vorbis data */
@@ -280,10 +283,10 @@ int _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, uint
     i = 0;
     while(i < 3) {
 
-        ogg_stream_pagein(vf->os, og_ptr);
+        ogg_stream_pagein(og_ptr);
 
         while(i < 3) {
-            int result = ogg_stream_packetout(vf->os, &op);
+            int result = ogg_stream_packetout(&op);
             if(result == 0) break;
             if(result == -1) {
                 ret = OV_EBADHEADER;
@@ -349,7 +352,7 @@ void _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset) {
             int32_t lastblock = -1;
             int     result;
 
-            ogg_stream_reset_serialno(vf->os, vf->serialnos[i]);
+            ogg_stream_reset_serialno(vf->serialnos[i]);
 
             while(1) {
                 ogg_packet op = {0, 0, 0, 0, 0, 0};
@@ -365,8 +368,8 @@ void _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset) {
                 pos = ogg_page_granulepos(&og);
 
                 /* count blocksizes of all frames in the page */
-                ogg_stream_pagein(vf->os, &og);
-                while((result = ogg_stream_packetout(vf->os, &op))) {
+                ogg_stream_pagein(&og);
+                while((result = ogg_stream_packetout(&op))) {
                     if(result > 0) { /* ignore holes */
                         int32_t thisblock = vorbis_packet_blocksize(&vf->vi, &op);
                         if(lastblock != -1) accumulated += (lastblock + thisblock) >> 2;
@@ -453,7 +456,7 @@ int _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp) {
          neither is a page */
         if(vf->ready_state == INITSET) {
             while(1) {
-                int     result = ogg_stream_packetout(vf->os, &op);
+                int     result = ogg_stream_packetout(&op);
                 int64_t granulepos;
 
                 if(result < 0) {
@@ -556,7 +559,7 @@ int _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp) {
 
             if(_make_decode_ready(vf)) return OV_EBADLINK;
         }
-        ogg_stream_pagein(vf->os, &og);
+        ogg_stream_pagein(&og);
     }
 cleanup:
     ogg_packet_release(&op);
@@ -569,7 +572,7 @@ int ov_clear(OggVorbis_File *vf) {
     if(vf) {
         vorbis_dsp_destroy(vf->vd);
         vf->vd = 0;
-        ogg_stream_destroy(vf->os);
+        ogg_stream_destroy();
         vorbis_info_clear(&vf->vi);
         vorbis_comment_clear(&vf->vc);
         if(vf->dataoffsets) free(vf->dataoffsets);
@@ -593,10 +596,8 @@ int ov_open(File* fIn, OggVorbis_File *vf) {
 
     /* No seeking yet; Set up a 'single' (current) logical bitstream entry for partial open */
     vf->links = 1;
-
-    vf->os =(ogg_stream_state_t *)__calloc_heap_psram(1, sizeof(ogg_stream_state_t));
-    vf->os->serialno = -1; // serialno;
-    vf->os->pageno = -1;
+    s_oggStreamState->serialno = -1; // serialno;
+    s_oggStreamState->pageno = -1;
 
     /* Try to fetch the headers, maintaining all the storage */
     if((ret = _fetch_headers(vf, &vf->vi, &vf->vc, &vf->current_serialno, NULL)) < 0) {
@@ -1258,20 +1259,20 @@ int ogg_page_release(ogg_page *og) {
     return OGG_SUCCESS;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int ogg_stream_reset_serialno(ogg_stream_state_t *os, int serialno) {
-    ogg_stream_reset(os);
-    os->serialno = serialno;
+int ogg_stream_reset_serialno(int serialno) {
+    ogg_stream_reset();
+    s_oggStreamState->serialno = serialno;
     return OGG_SUCCESS;
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* add the incoming page to the stream state; we decompose the page into packet segments here as well. */
 
-int ogg_stream_pagein(ogg_stream_state_t *os, ogg_page *og) {
+int ogg_stream_pagein(ogg_page *og) {
     int serialno = ogg_page_serialno(og);
     int version = ogg_page_version(og);
 
     /* check the serial number */
-    if(serialno != os->serialno) {
+    if(serialno != s_oggStreamState->serialno) {
         ogg_page_release(og);
         return OGG_ESERIAL;
     }
@@ -1281,17 +1282,17 @@ int ogg_stream_pagein(ogg_stream_state_t *os, ogg_page *og) {
     }
 
     /* add to fifos */
-    if(!os->body_tail) {
-        os->body_tail = og->body;
-        os->body_head = ogg_buffer_walk(og->body);
+    if(!s_oggStreamState->body_tail) {
+        s_oggStreamState->body_tail = og->body;
+        s_oggStreamState->body_head = ogg_buffer_walk(og->body);
     }
-    else { os->body_head = ogg_buffer_cat(os->body_head, og->body); }
-    if(!os->header_tail) {
-        os->header_tail = og->header;
-        os->header_head = ogg_buffer_walk(og->header);
-        os->lacing_fill = -27;
+    else { s_oggStreamState->body_head = ogg_buffer_cat(s_oggStreamState->body_head, og->body); }
+    if(!s_oggStreamState->header_tail) {
+        s_oggStreamState->header_tail = og->header;
+        s_oggStreamState->header_head = ogg_buffer_walk(og->header);
+        s_oggStreamState->lacing_fill = -27;
     }
-    else { os->header_head = ogg_buffer_cat(os->header_head, og->header); }
+    else { s_oggStreamState->header_head = ogg_buffer_cat(s_oggStreamState->header_head, og->header); }
 
     memset(og, 0, sizeof(*og));
     return OGG_SUCCESS;
@@ -1313,9 +1314,9 @@ ogg_reference_t *ogg_buffer_cat(ogg_reference_t *tail, ogg_reference_t *head) {
     return ogg_buffer_walk(head);
 }
 //---------------------------------------------------------------------------------------------------------------------
-int ogg_stream_packetout(ogg_stream_state_t *os, ogg_packet *op) { return _packetout(os, op, 1); }
+int ogg_stream_packetout(ogg_packet *op) { return _packetout(op, 1); }
 //---------------------------------------------------------------------------------------------------------------------
-int ogg_stream_packetpeek(ogg_stream_state_t *os, ogg_packet *op) { return _packetout(os, op, 0); }
+int ogg_stream_packetpeek(ogg_packet *op) { return _packetout(op, 0); }
 //---------------------------------------------------------------------------------------------------------------------
 int ogg_packet_release(ogg_packet *op) {
     if(op) {
@@ -1325,87 +1326,87 @@ int ogg_packet_release(ogg_packet *op) {
     return OGG_SUCCESS;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int _packetout(ogg_stream_state_t *os, ogg_packet *op, int adv) {
+int _packetout(ogg_packet *op, int adv) {
     ogg_packet_release(op);
-    _span_queued_page(os);
+    _span_queued_page();
 
-    if(os->holeflag) {
-        int temp = os->holeflag;
-        if(os->clearflag) os->holeflag = 0;
+    if(s_oggStreamState->holeflag) {
+        int temp = s_oggStreamState->holeflag;
+        if(s_oggStreamState->clearflag) s_oggStreamState->holeflag = 0;
         else
-            os->holeflag = 1;
+            s_oggStreamState->holeflag = 1;
         if(temp == 2) {
-            os->packetno++;
+            s_oggStreamState->packetno++;
             return OGG_HOLE;
         }
     }
-    if(os->spanflag) {
-        int temp = os->spanflag;
-        if(os->clearflag) os->spanflag = 0;
+    if(s_oggStreamState->spanflag) {
+        int temp = s_oggStreamState->spanflag;
+        if(s_oggStreamState->clearflag) s_oggStreamState->spanflag = 0;
         else
-            os->spanflag = 1;
+            s_oggStreamState->spanflag = 1;
         if(temp == 2) {
-            os->packetno++;
+            s_oggStreamState->packetno++;
             return OGG_SPAN;
         }
     }
 
-    if(!(os->body_fill & FINFLAG)) return 0;
+    if(!(s_oggStreamState->body_fill & FINFLAG)) return 0;
     if(!op && !adv)
         return 1; /* just using peek as an inexpensive way
          to ask if there's a whole packet waiting */
     if(op) {
-        op->b_o_s = os->b_o_s;
-        if(os->e_o_s && os->body_fill_next == 0) op->e_o_s = os->e_o_s;
+        op->b_o_s = s_oggStreamState->b_o_s;
+        if(s_oggStreamState->e_o_s && s_oggStreamState->body_fill_next == 0) op->e_o_s = s_oggStreamState->e_o_s;
         else
             op->e_o_s = 0;
-        if((os->body_fill & FINFLAG) && !(os->body_fill_next & FINFLAG)) op->granulepos = os->granulepos;
+        if((s_oggStreamState->body_fill & FINFLAG) && !(s_oggStreamState->body_fill_next & FINFLAG)) op->granulepos = s_oggStreamState->granulepos;
         else
             op->granulepos = -1;
-        op->packetno = os->packetno;
+        op->packetno = s_oggStreamState->packetno;
     }
 
     if(adv) {
         oggbyte_buffer_t ob;
-        oggbyte_init(&ob, os->header_tail);
+        oggbyte_init(&ob, s_oggStreamState->header_tail);
 
         /* split the body contents off */
         if(op) {
-            op->packet = ogg_buffer_split(&os->body_tail, &os->body_head, os->body_fill & FINMASK);
-            op->bytes = os->body_fill & FINMASK;
+            op->packet = ogg_buffer_split(&s_oggStreamState->body_tail, &s_oggStreamState->body_head, s_oggStreamState->body_fill & FINMASK);
+            op->bytes = s_oggStreamState->body_fill & FINMASK;
         }
         else {
-            os->body_tail = ogg_buffer_pretruncate(os->body_tail, os->body_fill & FINMASK);
-            if(os->body_tail == 0) os->body_head = 0;
+            s_oggStreamState->body_tail = ogg_buffer_pretruncate(s_oggStreamState->body_tail, s_oggStreamState->body_fill & FINMASK);
+            if(s_oggStreamState->body_tail == 0) s_oggStreamState->body_head = 0;
         }
 
         /* update lacing pointers */
-        os->body_fill = os->body_fill_next;
-        _next_lace(&ob, os);
+        s_oggStreamState->body_fill = s_oggStreamState->body_fill_next;
+        _next_lace(&ob);
     }
 
     if(adv) {
-        os->packetno++;
-        os->b_o_s = 0;
+        s_oggStreamState->packetno++;
+        s_oggStreamState->b_o_s = 0;
     }
 
     return 1;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void _span_queued_page(ogg_stream_state_t *os) {
-    while(!(os->body_fill & FINFLAG)) {
-        if(!os->header_tail) break;
+void _span_queued_page() {
+    while(!(s_oggStreamState->body_fill & FINFLAG)) {
+        if(!s_oggStreamState->header_tail) break;
 
         /* first flush out preceeding page header (if any).  Body is
          flushed as it's consumed, so that's not done here. */
 
-        if(os->lacing_fill >= 0) os->header_tail = ogg_buffer_pretruncate(os->header_tail, os->lacing_fill + 27);
-        os->lacing_fill = 0;
-        os->laceptr = 0;
-        os->clearflag = 0;
+        if(s_oggStreamState->lacing_fill >= 0) s_oggStreamState->header_tail = ogg_buffer_pretruncate(s_oggStreamState->header_tail, s_oggStreamState->lacing_fill + 27);
+        s_oggStreamState->lacing_fill = 0;
+        s_oggStreamState->laceptr = 0;
+        s_oggStreamState->clearflag = 0;
 
-        if(!os->header_tail) {
-            os->header_head = 0;
+        if(!s_oggStreamState->header_tail) {
+            s_oggStreamState->header_head = 0;
             break;
         }
         else {
@@ -1414,75 +1415,75 @@ void _span_queued_page(ogg_stream_state_t *os) {
             int32_t          pageno;
             oggbyte_buffer_t ob;
             ogg_page         og;         /* only for parsing header values */
-            og.header = os->header_tail; /* only for parsing header values */
+            og.header = s_oggStreamState->header_tail; /* only for parsing header values */
             pageno = ogg_page_pageno(&og);
 
-            oggbyte_init(&ob, os->header_tail);
-            os->lacing_fill = oggbyte_read1(&ob, 26);
+            oggbyte_init(&ob, s_oggStreamState->header_tail);
+            s_oggStreamState->lacing_fill = oggbyte_read1(&ob, 26);
 
             /* are we in sequence? */
-            if(pageno != os->pageno) {
-                if(os->pageno == -1)  /* indicates seek _or reset */
-                    os->holeflag = 1; /* set for internal use */
+            if(pageno != s_oggStreamState->pageno) {
+                if(s_oggStreamState->pageno == -1)  /* indicates seek _or reset */
+                    s_oggStreamState->holeflag = 1; /* set for internal use */
                 else
-                    os->holeflag = 2; /* set for external reporting */
+                    s_oggStreamState->holeflag = 2; /* set for external reporting */
 
-                os->body_tail = ogg_buffer_pretruncate(os->body_tail, os->body_fill);
-                if(os->body_tail == 0) os->body_head = 0;
-                os->body_fill = 0;
+                s_oggStreamState->body_tail = ogg_buffer_pretruncate(s_oggStreamState->body_tail, s_oggStreamState->body_fill);
+                if(s_oggStreamState->body_tail == 0) s_oggStreamState->body_head = 0;
+                s_oggStreamState->body_fill = 0;
             }
 
             if(ogg_page_continued(&og)) {
-                if(os->body_fill == 0) {
+                if(s_oggStreamState->body_fill == 0) {
                     /* continued packet, but no preceeding data to continue */
                     /* dump the first partial packet on the page */
-                    _next_lace(&ob, os);
-                    os->body_tail = ogg_buffer_pretruncate(os->body_tail, os->body_fill_next & FINMASK);
-                    if(os->body_tail == 0) os->body_head = 0;
+                    _next_lace(&ob);
+                    s_oggStreamState->body_tail = ogg_buffer_pretruncate(s_oggStreamState->body_tail, s_oggStreamState->body_fill_next & FINMASK);
+                    if(s_oggStreamState->body_tail == 0) s_oggStreamState->body_head = 0;
                     /* set span flag */
-                    if(!os->spanflag && !os->holeflag) os->spanflag = 2;
+                    if(!s_oggStreamState->spanflag && !s_oggStreamState->holeflag) s_oggStreamState->spanflag = 2;
                 }
             }
             else {
-                if(os->body_fill > 0) {
+                if(s_oggStreamState->body_fill > 0) {
                     /* preceeding data to continue, but not a continued page */
                     /* dump body_fill */
-                    os->body_tail = ogg_buffer_pretruncate(os->body_tail, os->body_fill);
-                    if(os->body_tail == 0) os->body_head = 0;
-                    os->body_fill = 0;
+                    s_oggStreamState->body_tail = ogg_buffer_pretruncate(s_oggStreamState->body_tail, s_oggStreamState->body_fill);
+                    if(s_oggStreamState->body_tail == 0) s_oggStreamState->body_head = 0;
+                    s_oggStreamState->body_fill = 0;
 
                     /* set espan flag */
-                    if(!os->spanflag && !os->holeflag) os->spanflag = 2;
+                    if(!s_oggStreamState->spanflag && !s_oggStreamState->holeflag) s_oggStreamState->spanflag = 2;
                 }
             }
 
-            if(os->laceptr < os->lacing_fill) {
-                os->granulepos = ogg_page_granulepos(&og);
+            if(s_oggStreamState->laceptr < s_oggStreamState->lacing_fill) {
+                s_oggStreamState->granulepos = ogg_page_granulepos(&og);
 
                 /* get current packet size & flag */
-                _next_lace(&ob, os);
-                os->body_fill += os->body_fill_next; /* addition handles the flag fine;
+                _next_lace(&ob);
+                s_oggStreamState->body_fill += s_oggStreamState->body_fill_next; /* addition handles the flag fine;
                  unsigned on purpose */
                 /* ...and next packet size & flag */
-                _next_lace(&ob, os);
+                _next_lace(&ob);
             }
 
-            os->pageno = pageno + 1;
-            os->e_o_s = ogg_page_eos(&og);
-            os->b_o_s = ogg_page_bos(&og);
+            s_oggStreamState->pageno = pageno + 1;
+            s_oggStreamState->e_o_s = ogg_page_eos(&og);
+            s_oggStreamState->b_o_s = ogg_page_bos(&og);
         }
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os) {
+void _next_lace(oggbyte_buffer_t *ob) {
     /* search ahead one lace */
-    os->body_fill_next = 0;
-    while(os->laceptr < os->lacing_fill) {
-        int val = oggbyte_read1(ob, 27 + os->laceptr++);
-        os->body_fill_next += val;
+    s_oggStreamState->body_fill_next = 0;
+    while(s_oggStreamState->laceptr < s_oggStreamState->lacing_fill) {
+        int val = oggbyte_read1(ob, 27 + s_oggStreamState->laceptr++);
+        s_oggStreamState->body_fill_next += val;
         if(val < 255) {
-            os->body_fill_next |= FINFLAG;
-            os->clearflag = 1;
+            s_oggStreamState->body_fill_next |= FINFLAG;
+            s_oggStreamState->clearflag = 1;
             break;
         }
     }
@@ -1498,36 +1499,36 @@ int ogg_sync_destroy() {
     return OGG_SUCCESS;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int ogg_stream_destroy(ogg_stream_state_t *os) {
-    if(os) {
-        ogg_buffer_release(os->header_tail);
-        ogg_buffer_release(os->body_tail);
-        memset(os, 0, sizeof(*os));
-        free(os);
+int ogg_stream_destroy() {
+    if(s_oggStreamState) {
+        ogg_buffer_release(s_oggStreamState->header_tail);
+        ogg_buffer_release(s_oggStreamState->body_tail);
+        memset(s_oggStreamState, 0, sizeof(*s_oggStreamState));
+        free(s_oggStreamState);
     }
     return OGG_SUCCESS;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int ogg_stream_reset(ogg_stream_state_t *os) {
-    ogg_buffer_release(os->header_tail);
-    ogg_buffer_release(os->body_tail);
-    os->header_tail = os->header_head = 0;
-    os->body_tail = os->body_head = 0;
+int ogg_stream_reset() {
+    ogg_buffer_release(s_oggStreamState->header_tail);
+    ogg_buffer_release(s_oggStreamState->body_tail);
+    s_oggStreamState->header_tail = s_oggStreamState->header_head = 0;
+    s_oggStreamState->body_tail = s_oggStreamState->body_head = 0;
 
-    os->e_o_s = 0;
-    os->b_o_s = 0;
-    os->pageno = -1;
-    os->packetno = 0;
-    os->granulepos = 0;
+    s_oggStreamState->e_o_s = 0;
+    s_oggStreamState->b_o_s = 0;
+    s_oggStreamState->pageno = -1;
+    s_oggStreamState->packetno = 0;
+    s_oggStreamState->granulepos = 0;
 
-    os->body_fill = 0;
-    os->lacing_fill = 0;
+    s_oggStreamState->body_fill = 0;
+    s_oggStreamState->lacing_fill = 0;
 
-    os->holeflag = 0;
-    os->spanflag = 0;
-    os->clearflag = 0;
-    os->laceptr = 0;
-    os->body_fill_next = 0;
+    s_oggStreamState->holeflag = 0;
+    s_oggStreamState->spanflag = 0;
+    s_oggStreamState->clearflag = 0;
+    s_oggStreamState->laceptr = 0;
+    s_oggStreamState->body_fill_next = 0;
 
     return OGG_SUCCESS;
 }
