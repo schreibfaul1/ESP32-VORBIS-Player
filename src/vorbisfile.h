@@ -228,10 +228,8 @@ typedef struct vorbis_dsp_state vorbis_dsp_state;
 
 typedef struct OggVorbis_File{
     File               *datasource; /* Pointer to a FILE *, etc. */
-//    int                 seekable;
     int64_t             offset;
     int64_t             end;
-//    ogg_sync_state_t   *oy;     // If the FILE handle isn't seekable (eg, a pipe), only the current
     int                 links;  // stream appears */
     int64_t            *offsets;
     int64_t            *dataoffsets;
@@ -280,8 +278,8 @@ uint8_t            *ogg_sync_bufferin(int32_t bytes);
 ogg_reference_t    *ogg_buffer_alloc(ogg_buffer_state_t *bs, int32_t bytes);
 void                ogg_buffer_realloc(ogg_reference_t *_or, int32_t bytes);
 ogg_reference_t    *_fetch_ref(ogg_buffer_state_t *bs);
-int                 ogg_sync_wrote(ogg_sync_state_t *oy, int32_t bytes);
-int                 ogg_sync_reset(ogg_sync_state_t *oy);
+int                 ogg_sync_wrote(int32_t bytes);
+int                 ogg_sync_reset();
 void                ogg_buffer_release(ogg_reference_t *_or);
 void                ogg_buffer_release_one(ogg_reference_t *_or);
 int32_t             ogg_sync_pageseek(ogg_page *og);
@@ -315,7 +313,7 @@ int                 ogg_packet_release(ogg_packet *op);
 int                 _packetout(ogg_stream_state_t *os, ogg_packet *op, int adv);
 void                _span_queued_page(ogg_stream_state_t *os);
 void                _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os);
-int                 ogg_sync_destroy(ogg_sync_state_t *oy);
+int                 ogg_sync_destroy();
 ogg_stream_state_t *ogg_stream_create(int serialno);
 int                 ogg_stream_destroy(ogg_stream_state_t *os);
 int                 ogg_stream_reset(ogg_stream_state_t *os);

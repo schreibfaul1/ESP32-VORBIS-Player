@@ -121,7 +121,7 @@ int32_t _get_data(OggVorbis_File *vf) {
         int32_t  bytes = vf->datasource->readBytes((char*)buffer, CHUNKSIZE);
         if(bytes != CHUNKSIZE) {log_e("eof"); return -2;} // esp32 (-1) if eof
         if(bytes <  0){log_e("eof"); return -2;}          // esp32 (-1) if eof
-        if(bytes > 0) ogg_sync_wrote(s_oggSyncState, bytes);
+        if(bytes > 0) ogg_sync_wrote(bytes);
         if(bytes == 0) return -1;
 
         return bytes;
@@ -576,7 +576,7 @@ int ov_clear(OggVorbis_File *vf) {
         if(vf->pcmlengths) free(vf->pcmlengths);
         if(vf->serialnos) free(vf->serialnos);
         if(vf->offsets) free(vf->offsets);
-        ogg_sync_destroy(s_oggSyncState);
+        ogg_sync_destroy();
 
         if(vf->datasource)  vf->datasource->close();
         memset(vf, 0, sizeof(*vf));
@@ -834,24 +834,24 @@ ogg_buffer_t *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes) {
     return ob;
 }
 //---------------------------------------------------------------------------------------------------------------------
-int ogg_sync_wrote(ogg_sync_state_t *oy, int32_t bytes) {
-    if(!oy->fifo_head) return OGG_EINVAL;
-    if(oy->fifo_head->buffer->size - oy->fifo_head->length - oy->fifo_head->begin < bytes) return OGG_EINVAL;
-    oy->fifo_head->length += bytes;
-    oy->fifo_fill += bytes;
+int ogg_sync_wrote(int32_t bytes) {
+    if(!s_oggSyncState->fifo_head) return OGG_EINVAL;
+    if(s_oggSyncState->fifo_head->buffer->size - s_oggSyncState->fifo_head->length - s_oggSyncState->fifo_head->begin < bytes) return OGG_EINVAL;
+    s_oggSyncState->fifo_head->length += bytes;
+    s_oggSyncState->fifo_fill += bytes;
     return OGG_SUCCESS;
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* clear things to an initial state.  Good to call, eg, before seeking */
-int ogg_sync_reset(ogg_sync_state_t *oy) {
-    ogg_buffer_release(oy->fifo_tail);
-    oy->fifo_tail = 0;
-    oy->fifo_head = 0;
-    oy->fifo_fill = 0;
+int ogg_sync_reset() {
+    ogg_buffer_release(s_oggSyncState->fifo_tail);
+    s_oggSyncState->fifo_tail = 0;
+    s_oggSyncState->fifo_head = 0;
+    s_oggSyncState->fifo_fill = 0;
 
-    oy->unsynced = 0;
-    oy->headerbytes = 0;
-    oy->bodybytes = 0;
+    s_oggSyncState->unsynced = 0;
+    s_oggSyncState->headerbytes = 0;
+    s_oggSyncState->bodybytes = 0;
     return OGG_SUCCESS;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -1485,12 +1485,12 @@ void _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-int ogg_sync_destroy(ogg_sync_state_t *oy) {
-    if(oy) {
-        ogg_sync_reset(oy);
+int ogg_sync_destroy() {
+    if(s_oggSyncState) {
+        ogg_sync_reset();
         ogg_buffer_destroy(s_oggBufferState);
-        memset(oy, 0, sizeof(*oy));
-        free(oy);
+        memset(s_oggSyncState, 0, sizeof(*s_oggSyncState));
+        free(s_oggSyncState);
     }
     return OGG_SUCCESS;
 }
