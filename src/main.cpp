@@ -264,6 +264,7 @@ void setup() {
 	File fOut = SD_MMC.open(outPath, "w");
 
     log_e("highWaterMark %u", uxTaskGetStackHighWaterMark(NULL));
+    VORBISDecoder_AllocateBuffers();
 
 	if(ov_open(&fIn, &vf) < 0) {
 		printf("Input does not appear to be an Ogg bitstream.\n");

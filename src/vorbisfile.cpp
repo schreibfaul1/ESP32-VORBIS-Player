@@ -29,6 +29,35 @@ File audiofile;
 #define __calloc_heap_psram(ch, size) \
     heap_caps_calloc_prefer(ch, size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
 
+
+ogg_sync_state_t*   s_oggSyncState = NULL;
+ogg_buffer_state_t* s_oggBufferState = NULL;
+//---------------------------------------------------------------------------------------------------------------------
+bool VORBISDecoder_AllocateBuffers(void){
+
+    if(!s_oggSyncState)   {s_oggSyncState   = (ogg_sync_state_t*)   __calloc_heap_psram(1, sizeof(ogg_sync_state_t));}
+    if(!s_oggBufferState) {s_oggBufferState = (ogg_buffer_state_t*) __calloc_heap_psram(1, sizeof(ogg_buffer_state_t));}
+
+    if(!s_oggSyncState || !s_oggBufferState){
+        log_e("not enough memory to allocate vorbisdecoder buffers");
+        return false;
+    }
+    log_i("size %i", sizeof(ogg_sync_state_t));
+//    VORBISDecoder_ClearBuffer();
+    return true;
+}
+
+void VORBISDecoder_ClearBuffer(){
+    memset(s_oggSyncState,   0, sizeof(ogg_sync_state_t));
+    return;
+}
+
+void VORBISDecoder_FreeBuffers(){
+    if(s_oggSyncState)    {free(s_oggSyncState);    s_oggSyncState    = NULL;}
+    if(s_oggBufferState)  {free(s_oggBufferState);  s_oggBufferState  = NULL;}
+}
+//---------------------------------------------------------------------------------------------------------------------
+
 /* A 'chained bitstream' is a Vorbis bitstream that contains more than one logical bitstream arranged end to end (the
  only form of Ogg multiplexing allowed in a Vorbis bitstream; grouping [parallel  multiplexing] is not allowed in
  Vorbis). A Vorbis file can be played beginning to end (streamed) without worrying ahead of time about chaining (see
@@ -563,7 +592,8 @@ int ov_open(File* fIn, OggVorbis_File *vf) {
     vf->datasource = fIn;
 
     /* init the framing state */
-    vf->oy = ogg_sync_create();
+    s_oggSyncState->bufferpool = s_oggBufferState;
+    vf->oy = s_oggSyncState;
 
     /* No seeking yet; Set up a 'single' (current) logical bitstream entry for partial open */
     vf->links = 1;
@@ -1457,21 +1487,6 @@ void _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os) {
             break;
         }
     }
-}
-//---------------------------------------------------------------------------------------------------------------------
-// centralized Ogg memory management based on linked lists of  references to refcounted basic, memory buffers.
-// References and buffers are both recycled.  Buffers are passed around and consumed in reference form.
-
-ogg_buffer_state_t *ogg_buffer_create(void) {
-    ogg_buffer_state_t *bs = (ogg_buffer_state_t *)__calloc_heap_psram(1, sizeof(*bs));
-    return bs;
-}
-//---------------------------------------------------------------------------------------------------------------------
-ogg_sync_state_t *ogg_sync_create(void) {
-    ogg_sync_state_t *oy = (ogg_sync_state_t *)__calloc_heap_psram(1, sizeof(*oy));
-    memset(oy, 0, sizeof(*oy));
-    oy->bufferpool = ogg_buffer_create();
-    return oy;
 }
 //---------------------------------------------------------------------------------------------------------------------
 int ogg_sync_destroy(ogg_sync_state_t *oy) {

@@ -250,6 +250,10 @@ typedef struct OggVorbis_File{
 } OggVorbis_File;
 
 //---------------------------------------------------------------------------------------------------------------------
+bool    VORBISDecoder_AllocateBuffers(void);
+void    VORBISDecoder_ClearBuffer();
+void    VORBISDecoder_FreeBuffers();
+
 int32_t _get_data(OggVorbis_File *vf);
 int64_t _get_next_page(OggVorbis_File *vf, ogg_page *og, int64_t boundary);
 int64_t _get_prev_page(OggVorbis_File *vf, ogg_page *og);
@@ -269,8 +273,6 @@ int64_t ov_time_total(OggVorbis_File *vf, int i);
 vorbis_info    *ov_info(OggVorbis_File *vf, int link);
 vorbis_comment *ov_comment(OggVorbis_File *vf);
 int32_t         ov_read(OggVorbis_File *vf, void *outBuff, int bytes_req);
-
-ogg_buffer_state_t *ogg_buffer_create(void);
 void                _ogg_buffer_destroy(ogg_buffer_state_t *bs);
 void                ogg_buffer_destroy(ogg_buffer_state_t *bs);
 ogg_buffer_t       *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes);
@@ -313,7 +315,6 @@ int                 ogg_packet_release(ogg_packet *op);
 int                 _packetout(ogg_stream_state_t *os, ogg_packet *op, int adv);
 void                _span_queued_page(ogg_stream_state_t *os);
 void                _next_lace(oggbyte_buffer_t *ob, ogg_stream_state_t *os);
-ogg_sync_state_t   *ogg_sync_create(void);
 int                 ogg_sync_destroy(ogg_sync_state_t *oy);
 ogg_stream_state_t *ogg_stream_create(int serialno);
 int                 ogg_stream_destroy(ogg_stream_state_t *os);
