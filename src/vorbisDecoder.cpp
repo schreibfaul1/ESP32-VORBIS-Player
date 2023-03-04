@@ -2962,8 +2962,6 @@ void _v_readstring(oggpack_buffer *o, char *buf, int bytes) {
     while(bytes--) { *buf++ = oggpack_read(o, 8); }
 }
 //---------------------------------------------------------------------------------------------------------------------
-void vorbis_comment_init(vorbis_comment *vc) { memset(vc, 0, sizeof(*vc)); }
-//---------------------------------------------------------------------------------------------------------------------
 /* This is more or less the same as strncasecmp - but that doesn't exist * everywhere, and this is a fairly trivial
  function, so we include it */
 int tagcompare(const char *s1, const char *s2, int n) {
@@ -2975,7 +2973,7 @@ int tagcompare(const char *s1, const char *s2, int n) {
     return 0;
 }
 //---------------------------------------------------------------------------------------------------------------------
-char *vorbis_comment_query(vorbis_comment *vc, char *tag, int count) {
+char *vorbis_comment_query(vorbis_comment_t *vc, char *tag, int count) {
     int32_t i;
     int     found = 0;
     int     taglen = strlen(tag) + 1; /* +1 for the = we append */
@@ -2995,7 +2993,7 @@ char *vorbis_comment_query(vorbis_comment *vc, char *tag, int count) {
     return NULL; /* didn't find anything */
 }
 //---------------------------------------------------------------------------------------------------------------------
-int vorbis_comment_query_count(vorbis_comment *vc, char *tag) {
+int vorbis_comment_query_count(vorbis_comment_t *vc, char *tag) {
     int   i, count = 0;
     int   taglen = strlen(tag) + 1; /* +1 for the = we append */
     char *fulltag = (char *)alloca(taglen + 1);
@@ -3009,7 +3007,7 @@ int vorbis_comment_query_count(vorbis_comment *vc, char *tag) {
     return count;
 }
 //---------------------------------------------------------------------------------------------------------------------
-void vorbis_comment_clear(vorbis_comment *vc) {
+void vorbis_comment_clear(vorbis_comment_t *vc) {
     if(vc) {
         int32_t i;
         for(i = 0; i < vc->comments; i++)
@@ -3108,7 +3106,7 @@ err_out:
     return (OV_EBADHEADER);
 }
 //---------------------------------------------------------------------------------------------------------------------
-int _vorbis_unpack_comment(vorbis_comment *vc, oggpack_buffer *opb) {
+int _vorbis_unpack_comment(vorbis_comment_t *vc, oggpack_buffer *opb) {
     int i;
     int vendorlen = oggpack_read(opb, 32);
     if(vendorlen < 0) goto err_out;
@@ -3203,7 +3201,7 @@ err_out:
 /* The Vorbis header is in three packets; the initial small packet in the first page that identifies basic parameters,
  a second packet with bitstream comments and a third packet that holds the codebook. */
 
-int vorbis_dsp_headerin(vorbis_info *vi, vorbis_comment *vc, ogg_packet *op) {
+int vorbis_dsp_headerin(vorbis_info *vi, vorbis_comment_t *vc, ogg_packet *op) {
     oggpack_buffer opb;
 
     if(op) {

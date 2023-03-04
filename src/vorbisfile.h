@@ -212,12 +212,12 @@ typedef struct {  // mode
     uint8_t mapping;
 } vorbis_info_mode;
 
-typedef struct vorbis_comment {
+typedef struct vorbis_comment_t {
     char **user_comments;
     int   *comment_lengths;
     int    comments;
     char  *vendor;
-} vorbis_comment;
+} vorbis_comment_t;
 
 struct vorbis_dsp_state;
 typedef struct vorbis_dsp_state vorbis_dsp_state;
@@ -232,7 +232,6 @@ typedef struct OggVorbis_File {
     uint32_t           *serialnos;
     int64_t            *pcmlengths;
     vorbis_info         vi;
-    vorbis_comment      vc;
     int64_t             pcm_offset; /* Decoding working state local storage */
     int                 ready_state;
     uint32_t            current_serialno;
@@ -253,7 +252,7 @@ int64_t _get_next_page(OggVorbis_File *vf, ogg_page *og, int64_t boundary);
 int64_t _get_prev_page(OggVorbis_File *vf, ogg_page *og);
 int     _bisect_forward_serialno(OggVorbis_File *vf, int64_t begin, int64_t searched, int64_t end, uint32_t currentno,
                                  int32_t m);
-int     _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, uint32_t *serialno, ogg_page *og_ptr);
+int     _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, uint32_t *serialno, ogg_page *og_ptr);
 void    _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset);
 int     _make_decode_ready(OggVorbis_File *vf);
 int     _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp);
@@ -265,7 +264,7 @@ int32_t ov_serialnumber(OggVorbis_File *vf, int i);
 int64_t ov_pcm_total(OggVorbis_File *vf, int i);
 int64_t ov_time_total(OggVorbis_File *vf, int i);
 vorbis_info    *ov_info(OggVorbis_File *vf, int link);
-vorbis_comment *ov_comment(OggVorbis_File *vf);
+vorbis_comment_t *ov_comment(OggVorbis_File *vf);
 int32_t         ov_read(OggVorbis_File *vf, void *outBuff, int bytes_req);
 void                _ogg_buffer_destroy(ogg_buffer_state_t *bs);
 void                ogg_buffer_destroy(ogg_buffer_state_t *bs);

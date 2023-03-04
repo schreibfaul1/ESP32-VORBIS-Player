@@ -33,19 +33,21 @@ File audiofile;
 ogg_sync_state_t*   s_oggSyncState = NULL;
 ogg_buffer_state_t* s_oggBufferState = NULL;
 ogg_stream_state_t* s_oggStreamState = NULL;
+vorbis_comment_t*   s_vorbisComment = NULL;
 //---------------------------------------------------------------------------------------------------------------------
 bool VORBISDecoder_AllocateBuffers(void){
 
     if(!s_oggSyncState)   {s_oggSyncState   = (ogg_sync_state_t*)   __calloc_heap_psram(1, sizeof(ogg_sync_state_t));}
     if(!s_oggBufferState) {s_oggBufferState = (ogg_buffer_state_t*) __calloc_heap_psram(1, sizeof(ogg_buffer_state_t));}
     if(!s_oggStreamState) {s_oggStreamState = (ogg_stream_state_t *)__calloc_heap_psram(1, sizeof(ogg_stream_state_t));}
+    if(!s_vorbisComment)  {s_vorbisComment  = (vorbis_comment_t *)  __calloc_heap_psram(1, sizeof(vorbis_comment_t));}
 
-    if(!s_oggSyncState || !s_oggBufferState || !s_oggStreamState){
+    if(!s_oggSyncState || !s_oggBufferState || !s_oggStreamState || !s_vorbisComment){
         log_e("not enough memory to allocate vorbisdecoder buffers");
         return false;
     }
     log_i("size %i", sizeof(ogg_sync_state_t));
-//    VORBISDecoder_ClearBuffer();
+    VORBISDecoder_ClearBuffer();
     return true;
 }
 
@@ -58,6 +60,7 @@ void VORBISDecoder_FreeBuffers(){
     if(s_oggSyncState)    {free(s_oggSyncState);    s_oggSyncState    = NULL;}
     if(s_oggBufferState)  {free(s_oggBufferState);  s_oggBufferState  = NULL;}
     if(s_oggStreamState)  {free(s_oggStreamState);  s_oggStreamState  = NULL;}
+    if(s_vorbisComment)   {free(s_vorbisComment);   s_vorbisComment   = NULL;}
 }
 //---------------------------------------------------------------------------------------------------------------------
 
@@ -256,7 +259,7 @@ int _bisect_forward_serialno(OggVorbis_File *vf, int64_t begin, int64_t searched
 /* uses the local ogg_stream storage in vf; this is important for non-streaming input sources */
 /* consumes the page that's passed in (if any) state is LINKSET upon successful return */
 
-int _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, uint32_t *serialno, ogg_page *og_ptr) {
+int _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, uint32_t *serialno, ogg_page *og_ptr) {
     ogg_page   og = {0, 0, 0, 0};
     ogg_packet op = {0, 0, 0, 0, 0, 0};
     int        i, ret;
@@ -275,10 +278,7 @@ int _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, uint
      Ogg bitstream is in fact Vorbis data */
 
     vorbis_info_init(vi);
-    vorbis_comment_init(vc);
-
-
-
+    memset(s_vorbisComment, 0, sizeof(vorbis_comment_t)); // init
 
     i = 0;
     while(i < 3) {
@@ -292,7 +292,7 @@ int _fetch_headers(OggVorbis_File *vf, vorbis_info *vi, vorbis_comment *vc, uint
                 ret = OV_EBADHEADER;
                 goto bail_header;
             }
-            if((ret = vorbis_dsp_headerin(vi, vc, &op))) { goto bail_header; }
+            if((ret = vorbis_dsp_headerin(vi, s_vorbisComment, &op))) { goto bail_header; }
             i++;
         }
 
@@ -314,7 +314,7 @@ bail_header:
     ogg_packet_release(&op);
     ogg_page_release(&og);
     vorbis_info_clear(vi);
-    vorbis_comment_clear(vc);
+    vorbis_comment_clear(s_vorbisComment);
     vf->ready_state = OPENED;
 
     return ret;
@@ -341,7 +341,7 @@ void _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset) {
         else {
             /* seek to the location of the initial header */
 
-            if(_fetch_headers(vf, &vf->vi, &vf->vc, NULL, NULL) < 0) { vf->dataoffsets[i] = -1; }
+            if(_fetch_headers(vf, &vf->vi, NULL, NULL) < 0) { vf->dataoffsets[i] = -1; }
             else { vf->dataoffsets[i] = vf->offset; }
         }
 
@@ -399,7 +399,7 @@ void _prefetch_all_offsets(OggVorbis_File *vf, int64_t dataoffset) {
                 if(ret < 0) {
                     /* this should not be possible */
                     vorbis_info_clear(&vf->vi);
-                    vorbis_comment_clear(&vf->vc);
+                    vorbis_comment_clear(s_vorbisComment);
                     break;
                 }
                 if(ogg_page_granulepos(&og) != -1) {
@@ -551,7 +551,7 @@ int _fetch_and_process_packet(OggVorbis_File *vf, int readp, int spanp) {
 
                 /* we're streaming */
                 /* fetch the three header packets, build the info struct */
-                int ret = _fetch_headers(vf, &vf->vi, &vf->vc, &vf->current_serialno, &og);
+                int ret = _fetch_headers(vf, &vf->vi, &vf->current_serialno, &og);
                 if(ret) goto cleanup;
                 vf->current_link++;
 
@@ -574,7 +574,7 @@ int ov_clear(OggVorbis_File *vf) {
         vf->vd = 0;
         ogg_stream_destroy();
         vorbis_info_clear(&vf->vi);
-        vorbis_comment_clear(&vf->vc);
+        vorbis_comment_clear(s_vorbisComment);
         if(vf->dataoffsets) free(vf->dataoffsets);
         if(vf->pcmlengths) free(vf->pcmlengths);
         if(vf->serialnos) free(vf->serialnos);
@@ -600,7 +600,7 @@ int ov_open(File* fIn, OggVorbis_File *vf) {
     s_oggStreamState->pageno = -1;
 
     /* Try to fetch the headers, maintaining all the storage */
-    if((ret = _fetch_headers(vf, &vf->vi, &vf->vc, &vf->current_serialno, NULL)) < 0) {
+    if((ret = _fetch_headers(vf, &vf->vi, &vf->current_serialno, NULL)) < 0) {
         vf->datasource = NULL;
         ov_clear(vf);
     }
@@ -688,8 +688,8 @@ vorbis_info *ov_info(OggVorbis_File *vf, int link) {
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* grr, strong typing, grr, no templates/inheritence, grr */
-vorbis_comment *ov_comment(OggVorbis_File *vf) {
-    return &vf->vc;
+vorbis_comment_t *ov_comment(OggVorbis_File *vf) {
+    return s_vorbisComment;
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* up to this point, everything could more or less hide the multiple logical bitstream nature of chaining from the
