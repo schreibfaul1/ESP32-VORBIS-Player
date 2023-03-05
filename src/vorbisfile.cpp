@@ -29,6 +29,8 @@ File audiofile;
 #define __calloc_heap_psram(ch, size) \
     heap_caps_calloc_prefer(ch, size, 2, MALLOC_CAP_DEFAULT|MALLOC_CAP_SPIRAM, MALLOC_CAP_DEFAULT|MALLOC_CAP_INTERNAL)
 
+ogg_buffer*         s_unused_Buffers = NULL;
+ogg_reference*      s_unused_references = NULL;
 
 ogg_sync_state_t*   s_oggSyncState = NULL;
 ogg_buffer_state_t* s_oggBufferState = NULL;
@@ -796,9 +798,9 @@ ogg_reference_t *_fetch_ref() {
     s_oggBufferState->outstanding++;
 
     /* do we have an unused reference sitting in the pool? */
-    if(s_oggBufferState->unused_references) {
-        _or = s_oggBufferState->unused_references;
-        s_oggBufferState->unused_references = _or->next;
+    if(s_unused_references) {
+        _or = s_unused_references;
+        s_unused_references = _or->next;
     }
     else {
         /* allocate a new reference */
@@ -816,9 +818,9 @@ ogg_buffer_t * _fetch_buffer(int32_t bytes) {
     s_oggBufferState->outstanding++;
 
     /* do we have an unused buffer sitting in the pool? */
-    if(s_oggBufferState->unused_buffers) {
-        ob = s_oggBufferState->unused_buffers;
-        s_oggBufferState->unused_buffers = ob->next;
+    if(s_unused_Buffers) {
+        ob = s_unused_Buffers;
+        s_unused_Buffers = ob->next;
 
         /* if the unused buffer is too small, grow it */
         if(ob->size < bytes) {
@@ -874,13 +876,13 @@ void ogg_buffer_release_one(ogg_reference_t *_or) {
     ob->refcount--;
     if(ob->refcount == 0) {
         s_oggBufferState->outstanding--; /* for the returned buffer */
-        ob->next = s_oggBufferState->unused_buffers;
-        s_oggBufferState->unused_buffers = ob;
+        ob->next = s_unused_Buffers;
+        s_unused_Buffers = ob;
     }
 
     s_oggBufferState->outstanding--; /* for the returned reference */
-    _or->next = s_oggBufferState->unused_references;
-    s_oggBufferState->unused_references = _or;
+    _or->next = s_unused_references;
+    s_unused_references = _or;
 
     ogg_buffer_destroy(); /* lazy cleanup (if needed) */
 }
@@ -895,8 +897,8 @@ void ogg_buffer_destroy() {
     ogg_reference_t *rt;
 
     if(s_oggBufferState->shutdown) {
-        bt = s_oggBufferState->unused_buffers;
-        rt = s_oggBufferState->unused_references;
+        bt = s_unused_Buffers;
+        rt = s_unused_references;
 
         while(bt) {
             ogg_buffer_t *b = bt;
@@ -904,13 +906,13 @@ void ogg_buffer_destroy() {
             if(b->data) free(b->data);
             free(b);
         }
-        s_oggBufferState->unused_buffers = 0;
+        s_unused_Buffers = 0;
         while(rt) {
             ogg_reference_t *r = rt;
             rt = r->next;
             free(r);
         }
-        s_oggBufferState->unused_references = 0;
+        s_unused_references = 0;
 
         if(!s_oggBufferState->outstanding) free(s_oggBufferState);
     }

@@ -30,10 +30,8 @@
 #define OGG_EEOS     -15
 
 typedef struct ogg_buffer_state {
-    struct ogg_buffer    *unused_buffers;
-    struct ogg_reference *unused_references;
-    int                   outstanding;
-    int                   shutdown;
+    int outstanding;
+    int shutdown;
 } ogg_buffer_state_t;
 
 typedef struct ogg_buffer {
