@@ -39,8 +39,8 @@ bool VORBISDecoder_AllocateBuffers(void){
 
     if(!s_oggSyncState)   {s_oggSyncState   = (ogg_sync_state_t*)   __calloc_heap_psram(1, sizeof(ogg_sync_state_t));}
     if(!s_oggBufferState) {s_oggBufferState = (ogg_buffer_state_t*) __calloc_heap_psram(1, sizeof(ogg_buffer_state_t));}
-    if(!s_oggStreamState) {s_oggStreamState = (ogg_stream_state_t *)__calloc_heap_psram(1, sizeof(ogg_stream_state_t));}
-    if(!s_vorbisComment)  {s_vorbisComment  = (vorbis_comment_t *)  __calloc_heap_psram(1, sizeof(vorbis_comment_t));}
+    if(!s_oggStreamState) {s_oggStreamState = (ogg_stream_state_t*) __calloc_heap_psram(1, sizeof(ogg_stream_state_t));}
+    if(!s_vorbisComment)  {s_vorbisComment  = (vorbis_comment_t*)   __calloc_heap_psram(1, sizeof(vorbis_comment_t));}
 
     if(!s_oggSyncState || !s_oggBufferState || !s_oggStreamState || !s_vorbisComment){
         log_e("not enough memory to allocate vorbisdecoder buffers");
@@ -748,7 +748,7 @@ uint8_t *ogg_sync_bufferin(int32_t bytes) {
 
     /* base case; fifo uninitialized */
     if(!s_oggSyncState->fifo_head) {
-        s_oggSyncState->fifo_head = s_oggSyncState->fifo_tail = ogg_buffer_alloc(s_oggBufferState, bytes);
+        s_oggSyncState->fifo_head = s_oggSyncState->fifo_tail = ogg_buffer_alloc(bytes);
         return s_oggSyncState->fifo_head->buffer->data;
     }
 
@@ -764,7 +764,7 @@ uint8_t *ogg_sync_bufferin(int32_t bytes) {
 
     /* current fragment used/full; get new fragment */
     {
-        ogg_reference_t *_new = ogg_buffer_alloc(s_oggBufferState, bytes);
+        ogg_reference_t *_new = ogg_buffer_alloc(bytes);
         s_oggSyncState->fifo_head->next = _new;
         s_oggSyncState->fifo_head = _new;
     }
@@ -773,9 +773,9 @@ uint8_t *ogg_sync_bufferin(int32_t bytes) {
 //---------------------------------------------------------------------------------------------------------------------
 /* fetch a reference pointing to a fresh, initially continguous buffer
  of at least [bytes] length */
-ogg_reference_t *ogg_buffer_alloc(ogg_buffer_state_t *bs, int32_t bytes) {
-    ogg_buffer_t    *ob = _fetch_buffer(bs, bytes);
-    ogg_reference_t *_or = _fetch_ref(bs);
+ogg_reference_t *ogg_buffer_alloc(int32_t bytes) {
+    ogg_buffer_t    *ob = _fetch_buffer(bytes);
+    ogg_reference_t *_or = _fetch_ref();
     _or->buffer = ob;
     return _or;
 }
@@ -791,14 +791,14 @@ void ogg_buffer_realloc(ogg_reference_t *_or, int32_t bytes) {
     }
 }
 //---------------------------------------------------------------------------------------------------------------------
-ogg_reference_t *_fetch_ref(ogg_buffer_state_t *bs) {
+ogg_reference_t *_fetch_ref() {
     ogg_reference_t *_or;
-    bs->outstanding++;
+    s_oggBufferState->outstanding++;
 
     /* do we have an unused reference sitting in the pool? */
-    if(bs->unused_references) {
-        _or = bs->unused_references;
-        bs->unused_references = _or->next;
+    if(s_oggBufferState->unused_references) {
+        _or = s_oggBufferState->unused_references;
+        s_oggBufferState->unused_references = _or->next;
     }
     else {
         /* allocate a new reference */
@@ -811,14 +811,14 @@ ogg_reference_t *_fetch_ref(ogg_buffer_state_t *bs) {
     return _or;
 }
 //---------------------------------------------------------------------------------------------------------------------
-ogg_buffer_t *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes) {
+ogg_buffer_t * _fetch_buffer(int32_t bytes) {
     ogg_buffer_t *ob;
-    bs->outstanding++;
+    s_oggBufferState->outstanding++;
 
     /* do we have an unused buffer sitting in the pool? */
-    if(bs->unused_buffers) {
-        ob = bs->unused_buffers;
-        bs->unused_buffers = ob->next;
+    if(s_oggBufferState->unused_buffers) {
+        ob = s_oggBufferState->unused_buffers;
+        s_oggBufferState->unused_buffers = ob->next;
 
         /* if the unused buffer is too small, grow it */
         if(ob->size < bytes) {
@@ -834,7 +834,6 @@ ogg_buffer_t *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes) {
     }
 
     ob->refcount = 1;
-    ob->owner = bs;
     return ob;
 }
 //---------------------------------------------------------------------------------------------------------------------
@@ -871,20 +870,19 @@ void ogg_buffer_release(ogg_reference_t *_or) {
 //---------------------------------------------------------------------------------------------------------------------
 void ogg_buffer_release_one(ogg_reference_t *_or) {
     ogg_buffer_t       *ob = _or->buffer;
-    ogg_buffer_state_t *bs = ob->owner;
 
     ob->refcount--;
     if(ob->refcount == 0) {
-        bs->outstanding--; /* for the returned buffer */
-        ob->next = bs->unused_buffers;
-        bs->unused_buffers = ob;
+        s_oggBufferState->outstanding--; /* for the returned buffer */
+        ob->next = s_oggBufferState->unused_buffers;
+        s_oggBufferState->unused_buffers = ob;
     }
 
-    bs->outstanding--; /* for the returned reference */
-    _or->next = bs->unused_references;
-    bs->unused_references = _or;
+    s_oggBufferState->outstanding--; /* for the returned reference */
+    _or->next = s_oggBufferState->unused_references;
+    s_oggBufferState->unused_references = _or;
 
-    _ogg_buffer_destroy(bs); /* lazy cleanup (if needed) */
+    ogg_buffer_destroy(); /* lazy cleanup (if needed) */
 }
 //---------------------------------------------------------------------------------------------------------------------
 // destruction is 'lazy'; there may be memory references outstanding, and yanking the buffer state
@@ -892,13 +890,13 @@ void ogg_buffer_release_one(ogg_reference_t *_or) {
 // watch for the stragglers to come in.  When they do, finish destruction.
 
 /* call the helper while holding lock */
-void _ogg_buffer_destroy(ogg_buffer_state_t *bs) {
+void ogg_buffer_destroy() {
     ogg_buffer_t    *bt;
     ogg_reference_t *rt;
 
-    if(bs->shutdown) {
-        bt = bs->unused_buffers;
-        rt = bs->unused_references;
+    if(s_oggBufferState->shutdown) {
+        bt = s_oggBufferState->unused_buffers;
+        rt = s_oggBufferState->unused_references;
 
         while(bt) {
             ogg_buffer_t *b = bt;
@@ -906,21 +904,16 @@ void _ogg_buffer_destroy(ogg_buffer_state_t *bs) {
             if(b->data) free(b->data);
             free(b);
         }
-        bs->unused_buffers = 0;
+        s_oggBufferState->unused_buffers = 0;
         while(rt) {
             ogg_reference_t *r = rt;
             rt = r->next;
             free(r);
         }
-        bs->unused_references = 0;
+        s_oggBufferState->unused_references = 0;
 
-        if(!bs->outstanding) free(bs);
+        if(!s_oggBufferState->outstanding) free(s_oggBufferState);
     }
-}
-//---------------------------------------------------------------------------------------------------------------------
-void ogg_buffer_destroy(ogg_buffer_state_t *bs) {
-    bs->shutdown = 1;
-    _ogg_buffer_destroy(bs);
 }
 //---------------------------------------------------------------------------------------------------------------------
 /* sync the stream.  This is meant to be useful for finding page boundaries.
@@ -1166,7 +1159,7 @@ ogg_reference_t *ogg_buffer_split(ogg_reference_t **tail, ogg_reference_t **head
             int32_t lengthB = _or->length - pos;
 
             /* make a new reference to tail the second piece */
-            *tail = _fetch_ref(_or->buffer->owner);
+            *tail = _fetch_ref();
 
             (*tail)->buffer = _or->buffer;
             (*tail)->begin = beginB;
@@ -1492,7 +1485,8 @@ void _next_lace(oggbyte_buffer_t *ob) {
 int ogg_sync_destroy() {
     if(s_oggSyncState) {
         ogg_sync_reset();
-        ogg_buffer_destroy(s_oggBufferState);
+        s_oggBufferState->shutdown = 1;
+        ogg_buffer_destroy();
         memset(s_oggSyncState, 0, sizeof(*s_oggSyncState));
         free(s_oggSyncState);
     }
@@ -1544,7 +1538,7 @@ ogg_reference_t *ogg_buffer_dup(ogg_reference_t *_or) {
     ogg_reference_t *ret = 0, *head = 0;
     /* duplicate the reference chain; increment refcounts */
     while(_or) {
-        ogg_reference_t *temp = _fetch_ref(_or->buffer->owner);
+        ogg_reference_t *temp = _fetch_ref();
         if(head) head->next = temp;
         else
             ret = temp;

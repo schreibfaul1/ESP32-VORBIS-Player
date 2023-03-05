@@ -40,7 +40,6 @@ typedef struct ogg_buffer {
     uint8_t            *data;
     int32_t             size;
     int                 refcount;
-    ogg_buffer_state_t *owner;
     struct ogg_buffer  *next;
 } ogg_buffer_t;
 
@@ -266,13 +265,12 @@ int64_t ov_time_total(OggVorbis_File *vf, int i);
 vorbis_info    *ov_info(OggVorbis_File *vf, int link);
 vorbis_comment_t *ov_comment(OggVorbis_File *vf);
 int32_t         ov_read(OggVorbis_File *vf, void *outBuff, int bytes_req);
-void                _ogg_buffer_destroy(ogg_buffer_state_t *bs);
-void                ogg_buffer_destroy(ogg_buffer_state_t *bs);
-ogg_buffer_t       *_fetch_buffer(ogg_buffer_state_t *bs, int32_t bytes);
+void                ogg_buffer_destroy();
+ogg_buffer_t       *_fetch_buffer(int32_t bytes);
 uint8_t            *ogg_sync_bufferin(int32_t bytes);
-ogg_reference_t    *ogg_buffer_alloc(ogg_buffer_state_t *bs, int32_t bytes);
+ogg_reference_t    *ogg_buffer_alloc(int32_t bytes);
 void                ogg_buffer_realloc(ogg_reference_t *_or, int32_t bytes);
-ogg_reference_t    *_fetch_ref(ogg_buffer_state_t *bs);
+ogg_reference_t    *_fetch_ref();
 int                 ogg_sync_wrote(int32_t bytes);
 int                 ogg_sync_reset();
 void                ogg_buffer_release(ogg_reference_t *_or);
